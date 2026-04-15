@@ -26,6 +26,7 @@ data class IntervalsActivity(
     @SerializedName("start_date_local") val startDateLocal: String? = null,
     val type: String? = null,
     val calories: Int? = null,
+    val work: Double? = null,  // Mechanical work in kJ; ~1 kJ ≈ 1 kcal at 25% efficiency
     @SerializedName("moving_time") val movingTime: Int? = null
 )
 

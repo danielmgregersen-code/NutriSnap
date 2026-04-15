@@ -127,7 +127,7 @@ class NutritionRepository(
     // Garmin-style: BMR + fixed base active calories + step bonus above 5,000 steps threshold
     fun calculateTDEE(profile: UserProfile, steps: Int = 0): Double {
         val bmr = calculateBMR(profile)
-        val baseActiveCalories = 460.0
+        val baseActiveCalories = 350.0
         val stepCalories = if (steps > 5000) steps * 0.042 else 0.0
         return bmr + baseActiveCalories + stepCalories
     }
@@ -297,7 +297,9 @@ class NutritionRepository(
 
             // Fetch activities to sum calories
             val activities = service.getActivities(intervalsAthleteId, dateStr, dateStr)
-            val activityCalories = activities.sumOf { it.calories ?: 0 }
+            // Prefer work (kJ) when available — 1 kJ ≈ 1 kcal at ~25% cycling efficiency
+            // Fall back to calories field for activities without a power meter
+            val activityCalories = activities.sumOf { it.work?.toInt() ?: it.calories ?: 0 }
             Log.d(TAG, "Activities: ${activities.size} found, $activityCalories total calories")
 
             // Load existing record to preserve fields not being synced (e.g. waterIntake)
