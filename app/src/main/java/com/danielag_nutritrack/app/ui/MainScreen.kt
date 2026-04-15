@@ -30,6 +30,9 @@ import com.danielag_nutritrack.app.R
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.Locale
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -69,6 +72,18 @@ fun MainScreen(viewModel: MainViewModel) {
     // Edit states
     var editingFoodLog by remember { mutableStateOf<FoodLog?>(null) }
     var editingExercise by remember { mutableStateOf<ExerciseLog?>(null) }
+
+    // Auto-sync from intervals.icu on every app open / resume
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME && viewModel.isIntervalsConfigured) {
+                viewModel.syncFromIntervals()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     // Only check for profile once on first composition
     LaunchedEffect(Unit) {
