@@ -257,14 +257,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun calculateTDEEWithWeight(profile: UserProfile, weight: Double, steps: Int = 0): Double {
         val bmr = calculateBMRWithWeight(profile, weight)
-        val activityMultiplier = when (profile.activityLevel) {
-            ActivityLevel.OFFICE_JOB -> 1.0
-            ActivityLevel.PHYSICAL_JOB -> 1.5
-        }
-
-        val stepCalories = steps * 0.042
-
-        return (bmr * activityMultiplier) + stepCalories
+        val baseActiveCalories = 460.0
+        val stepCalories = if (steps > 5000) steps * 0.042 else 0.0
+        return bmr + baseActiveCalories + stepCalories
     }
 
     private fun calculateTargetCaloriesWithWeight(profile: UserProfile, weight: Double, steps: Int = 0): Double {
