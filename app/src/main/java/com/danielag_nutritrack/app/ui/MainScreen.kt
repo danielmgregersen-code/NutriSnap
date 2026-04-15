@@ -48,6 +48,7 @@ fun MainScreen(viewModel: MainViewModel) {
     val pendingAnalyzedFood by viewModel.pendingAnalyzedFood.collectAsState()
     val isSyncing by viewModel.isSyncing.collectAsState()
     val syncMessage by viewModel.syncMessage.collectAsState()
+    val isRefining by viewModel.isRefining.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -372,12 +373,10 @@ fun MainScreen(viewModel: MainViewModel) {
                 carbs = analyzed.carbs,
                 fats = analyzed.fats,
                 notes = analyzed.notes,
-                onConfirm = {
-                    viewModel.savePendingFood()
-                },
-                onDismiss = {
-                    viewModel.clearPendingFood()
-                }
+                isRefining = isRefining,
+                onRefine = { viewModel.refineFood(it) },
+                onConfirm = { viewModel.savePendingFood() },
+                onDismiss = { viewModel.clearPendingFood() }
             )
         }
 

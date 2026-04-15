@@ -58,6 +58,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _pendingAnalyzedFood = MutableStateFlow<AnalyzedFood?>(null)
     val pendingAnalyzedFood: StateFlow<AnalyzedFood?> = _pendingAnalyzedFood
 
+    private val _conversationHistory = MutableStateFlow<List<com.danielag_nutritrack.app.api.Message>>(emptyList())
+
+    private val _isRefining = MutableStateFlow(false)
+    val isRefining: StateFlow<Boolean> = _isRefining.asStateFlow()
+
     private val _isSyncing = MutableStateFlow(false)
     val isSyncing: StateFlow<Boolean> = _isSyncing.asStateFlow()
 
@@ -292,6 +297,50 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun clearPendingFood() {
         _pendingAnalyzedFood.value = null
+        _conversationHistory.value = emptyList()
+    }
+
+    fun refineFood(userMessage: String) {
+        val history = _conversationHistory.value
+        if (history.isEmpty()) return
+
+        viewModelScope.launch {
+            _isRefining.value = true
+            try {
+                val correction = "$userMessage\n\nReturn the updated nutritional data in the exact same JSON format."
+                val messages = history + com.danielag_nutritrack.app.api.Message(role = "user", content = correction)
+
+                repository.refineFoodAnalysis(messages)
+                    .onSuccess { nutritionInfo ->
+                        _conversationHistory.value = repository.lastConversationMessages
+
+                        val categoryStr = nutritionInfo.category.split("|").firstOrNull()?.trim() ?: "SNACK"
+                        val category = try {
+                            MealCategory.valueOf(categoryStr)
+                        } catch (e: IllegalArgumentException) {
+                            _pendingAnalyzedFood.value?.category ?: MealCategory.SNACK
+                        }
+
+                        _pendingAnalyzedFood.value = AnalyzedFood(
+                            name = nutritionInfo.name,
+                            calories = nutritionInfo.calories,
+                            protein = nutritionInfo.protein,
+                            carbs = nutritionInfo.carbs,
+                            fats = nutritionInfo.fats,
+                            category = category,
+                            notes = "Confidence: ${nutritionInfo.confidence}/10\n\n${nutritionInfo.description}",
+                            components = nutritionInfo.components?.let { com.google.gson.Gson().toJson(it) }
+                        )
+                        loadApiUsage()
+                    }
+                    .onFailure { error ->
+                        android.util.Log.e("NutriTrack", "Refinement failed: ${error.message}", error)
+                        _uiState.update { it.copy(error = "Correction failed: ${error.message}") }
+                    }
+            } finally {
+                _isRefining.value = false
+            }
+        }
     }
 
     fun analyzeTextFood(description: String) {
@@ -330,6 +379,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             notes = "Confidence: ${nutritionInfo.confidence}/10\n\n${nutritionInfo.description}",
                             components = componentsJson  // NEW: Save components JSON
                         )
+                        _conversationHistory.value = repository.lastConversationMessages
 
                         android.util.Log.d("NutriTrack", "Analysis complete, showing review dialog")
                         _uiState.update { it.copy(isLoading = false) }
@@ -392,6 +442,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             notes = "Confidence: ${nutritionInfo.confidence}/10\n\n${nutritionInfo.description}",
                             components = componentsJson  // NEW: Save components JSON
                         )
+                        _conversationHistory.value = repository.lastConversationMessages
 
                         android.util.Log.d("NutriTrack", "Image analysis complete, showing review dialog")
                         _uiState.update { it.copy(isLoading = false) }

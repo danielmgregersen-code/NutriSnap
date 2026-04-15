@@ -111,6 +111,10 @@ class NutritionRepository(
         apiUsageDao.deleteOldRecords(calendar.timeInMillis)
     }
 
+    // Stores the last conversation so the ViewModel can continue the thread for corrections
+    var lastConversationMessages: List<Message> = emptyList()
+        private set
+
     // OpenAI Integration
     fun calculateBMR(profile: UserProfile): Double {
         val weightKg = profile.weight
@@ -243,6 +247,8 @@ class NutritionRepository(
                     Result.failure(Exception("Invalid response format"))
                 }
                 else -> {
+                    // Store conversation for follow-up corrections
+                    lastConversationMessages = request.messages + Message(role = "assistant", content = content)
                     try {
                         // Try to extract JSON if it's wrapped in markdown code blocks
                         val jsonContent = content.trim()
@@ -407,6 +413,8 @@ class NutritionRepository(
             Log.d(TAG, "OpenAI image analysis response: $content")
 
             if (content is String) {
+                // Store conversation for follow-up corrections
+                lastConversationMessages = request.messages + Message(role = "assistant", content = content)
                 try {
                     // Try to extract JSON if it's wrapped in markdown code blocks
                     val jsonContent = content.trim()
@@ -442,6 +450,51 @@ class NutritionRepository(
             }
         } catch (e: Exception) {
             Log.e(TAG, "Image API call failed: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+
+    // Continue a food analysis conversation with a user correction
+    suspend fun refineFoodAnalysis(conversationMessages: List<Message>): Result<NutritionInfo> {
+        return try {
+            if (!canMakeApiCall()) {
+                return Result.failure(Exception("Daily API limit reached ($DAILY_API_LIMIT calls). Resets at midnight."))
+            }
+
+            val request = OpenAIRequest(
+                model = "gpt-5.4",
+                messages = conversationMessages,
+                maxTokens = 10000
+            )
+
+            val response = openAIService.analyzeFood(
+                authorization = "Bearer $apiKey",
+                request = request
+            )
+
+            val content = response.choices.firstOrNull()?.message?.content
+
+            if (content is String) {
+                lastConversationMessages = conversationMessages + Message(role = "assistant", content = content)
+
+                val jsonContent = content.trim()
+                    .removePrefix("```json")
+                    .removePrefix("```")
+                    .removeSuffix("```")
+                    .trim()
+
+                val nutritionInfo = Gson().fromJson(jsonContent, NutritionInfo::class.java)
+                if (nutritionInfo != null) {
+                    incrementApiUsage()
+                    Result.success(nutritionInfo)
+                } else {
+                    Result.failure(Exception("Failed to parse updated nutrition information"))
+                }
+            } else {
+                Result.failure(Exception("Invalid response format"))
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Food refinement failed: ${e.message}", e)
             Result.failure(e)
         }
     }

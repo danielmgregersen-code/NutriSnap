@@ -5,6 +5,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -26,9 +27,12 @@ fun FoodReviewDialog(
     carbs: Double,
     fats: Double,
     notes: String?,
+    isRefining: Boolean = false,
+    onRefine: (String) -> Unit = {},
     onConfirm: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    var correctionText by remember { mutableStateOf("") }
     Dialog(onDismissRequest = onDismiss) {
         Card(
             modifier = Modifier
@@ -214,7 +218,47 @@ fun FoodReviewDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(16.dp))
+
+                HorizontalDivider()
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Correction chat input
+                OutlinedTextField(
+                    value = correctionText,
+                    onValueChange = { correctionText = it },
+                    label = { Text("Correct the analysis...") },
+                    placeholder = { Text("e.g. it's 200g not 100g") },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isRefining,
+                    singleLine = false,
+                    maxLines = 3,
+                    trailingIcon = {
+                        if (isRefining) {
+                            CircularProgressIndicator(
+                                modifier = Modifier
+                                    .padding(8.dp)
+                                    .size(24.dp),
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            IconButton(
+                                onClick = {
+                                    if (correctionText.isNotBlank()) {
+                                        onRefine(correctionText)
+                                        correctionText = ""
+                                    }
+                                },
+                                enabled = correctionText.isNotBlank()
+                            ) {
+                                Icon(Icons.Default.Send, contentDescription = "Send correction")
+                            }
+                        }
+                    }
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
 
                 // Action buttons
                 Row(
