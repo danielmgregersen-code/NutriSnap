@@ -216,7 +216,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val totalFats = state.foodLogs.sumOf { it.fats }
 
         val steps = state.dailyActivity?.steps ?: 0
-        val exerciseCalories = _exerciseLogs.value.sumOf { it.caloriesBurned }
+        val manualExerciseCalories = _exerciseLogs.value.sumOf { it.caloriesBurned }
+        val intervalsExerciseCalories = (state.dailyActivity?.exerciseCalories ?: 0).toDouble()
+        val exerciseCalories = manualExerciseCalories + intervalsExerciseCalories
 
         val currentWeight = state.dailyActivity?.weight
             ?: _weightHistory.value.lastOrNull()?.weight
@@ -225,7 +227,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val bmr = calculateBMRWithWeight(profile, currentWeight)
         val tdee = calculateTDEEWithWeight(profile, currentWeight, steps)
         val baseTargetCalories = calculateTargetCaloriesWithWeight(profile, currentWeight, steps)
-        val targetCalories = baseTargetCalories + exerciseCalories  // ADD EXERCISE!
+        val targetCalories = baseTargetCalories + exerciseCalories
         val caloriesBurned = tdee + exerciseCalories
 
         val netCalories = totalCaloriesConsumed - caloriesBurned

@@ -621,11 +621,16 @@ fun DailyStatsCard(
             Spacer(modifier = Modifier.height(4.dp))
 
             // Metrics line
-            val stepCalories = ((uiState.dailyActivity?.steps ?: 0) * 0.042).toInt()
-            val exerciseCalories = exerciseLogs.sumOf { it.caloriesBurned }
+            val steps = uiState.dailyActivity?.steps ?: 0
+            val stepCalories = if (steps > 5000) (steps * 0.042).toInt() else 0
+            val totalExerciseCalories = (uiState.caloriesBurned - uiState.tdee).toInt()
 
             Text(
-                "Burned: ${uiState.caloriesBurned.toInt()} | BMR: ${uiState.bmr.toInt()} | Steps: $stepCalories | Exercise: $exerciseCalories",
+                "Burned: ${uiState.caloriesBurned.toInt()} | BMR: ${uiState.bmr.toInt()}",
+                style = MaterialTheme.typography.bodySmall
+            )
+            Text(
+                "Steps: $stepCalories kcal | Exercise: $totalExerciseCalories kcal",
                 style = MaterialTheme.typography.bodySmall
             )
 
@@ -642,7 +647,7 @@ fun DailyStatsCard(
                 if (displayWeight != null) {
                     Column {
                         Text(
-                            "Weight: $displayWeight kg",
+                            "Weight: ${"%.1f".format(displayWeight)} kg",
                             style = MaterialTheme.typography.bodyLarge
                         )
                         if (!isWeightFromToday) {
