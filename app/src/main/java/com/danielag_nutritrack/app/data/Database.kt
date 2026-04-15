@@ -1,0 +1,189 @@
+package com.danielag_nutritrack.app.data
+
+import android.content.Context
+import androidx.room.*
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
+import kotlinx.coroutines.flow.Flow
+import java.util.Date
+
+class Converters {
+    @TypeConverter
+    fun fromTimestamp(value: Long?): Date? {
+        return value?.let { Date(it) }
+    }
+
+    @TypeConverter
+    fun dateToTimestamp(date: Date?): Long? {
+        return date?.time
+    }
+
+    @TypeConverter
+    fun fromMealCategory(value: MealCategory): String {
+        return value.name
+    }
+
+    @TypeConverter
+    fun toMealCategory(value: String): MealCategory {
+        return MealCategory.valueOf(value)
+    }
+
+    @TypeConverter
+    fun fromGender(value: Gender): String {
+        return value.name
+    }
+
+    @TypeConverter
+    fun toGender(value: String): Gender {
+        return Gender.valueOf(value)
+    }
+
+    @TypeConverter
+    fun fromActivityLevel(value: ActivityLevel): String {
+        return value.name
+    }
+
+    @TypeConverter
+    fun toActivityLevel(value: String): ActivityLevel {
+        return ActivityLevel.valueOf(value)
+    }
+
+    @TypeConverter
+    fun fromGoal(value: Goal): String {
+        return value.name
+    }
+
+    @TypeConverter
+    fun toGoal(value: String): Goal {
+        return Goal.valueOf(value)
+    }
+
+    @TypeConverter
+    fun fromWeightChangeRate(value: WeightChangeRate): String {
+        return value.name
+    }
+
+    @TypeConverter
+    fun toWeightChangeRate(value: String): WeightChangeRate {
+        return try {
+            WeightChangeRate.valueOf(value)
+        } catch (e: IllegalArgumentException) {
+            WeightChangeRate.RATE_050 // Default fallback
+        }
+    }
+}
+
+@Dao
+interface FoodLogDao {
+    @Query("SELECT * FROM food_logs ORDER BY timestamp DESC")
+    fun getAllLogs(): Flow<List<FoodLog>>
+
+    @Query("" +
+            "SELECT * FROM food_logs " +
+            "WHERE DATE(timestamp/1000, 'unixepoch', 'localtime') = DATE(:date/1000, 'unixepoch', 'localtime') " +
+            "ORDER BY timestamp DESC")
+    fun getLogsForDate(date: Long): Flow<List<FoodLog>>
+
+    @Insert
+    suspend fun insert(log: FoodLog): Long
+
+    @Delete
+    suspend fun delete(log: FoodLog)
+
+    @Update
+    suspend fun update(log: FoodLog)
+}
+
+@Dao
+interface UserProfileDao {
+    @Query("SELECT * FROM user_profile WHERE id = 1 LIMIT 1")
+    fun getProfile(): Flow<UserProfile?>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertOrUpdate(profile: UserProfile)
+}
+
+@Dao
+interface DailyActivityDao {
+    @Query("" +
+            "SELECT * FROM daily_activity " +
+            "WHERE DATE(date/1000, 'unixepoch', 'localtime') = DATE(:date/1000, 'unixepoch', 'localtime') LIMIT 1")
+    fun getActivityForDate(date: Long): Flow<DailyActivity?>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertOrUpdate(activity: DailyActivity)
+
+    @Query("SELECT * FROM daily_activity ORDER BY date DESC LIMIT 30")
+    fun getRecentActivities(): Flow<List<DailyActivity>>
+
+    @Query("SELECT * FROM daily_activity WHERE weight IS NOT NULL ORDER BY date DESC LIMIT 30")
+    fun getWeightHistory(): Flow<List<DailyActivity>>
+
+    @Query("SELECT * FROM daily_activity")
+    fun getAllActivities(): Flow<List<DailyActivity>>
+}
+
+@Dao
+interface ExerciseLogDao {
+    @Query("SELECT * FROM exercise_logs ORDER BY timestamp DESC")
+    fun getAllExercises(): Flow<List<ExerciseLog>>
+
+    @Query("" +
+            "SELECT * FROM exercise_logs " +
+            "WHERE DATE(timestamp/1000, 'unixepoch', 'localtime') = DATE(:date/1000, 'unixepoch', 'localtime') " +
+            "ORDER BY timestamp DESC")
+    fun getExercisesForDate(date: Long): Flow<List<ExerciseLog>>
+
+    @Insert
+    suspend fun insert(exercise: ExerciseLog): Long
+
+    @Delete
+    suspend fun delete(exercise: ExerciseLog)
+
+    @Update
+    suspend fun update(exercise: ExerciseLog)
+}
+
+// Migration from version 7 to 8: Add components column to food_logs
+val MIGRATION_7_8 = object : Migration(7, 8) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        // Add the components column to food_logs table
+        // It's nullable, so existing rows will have NULL for this column
+        database.execSQL(
+            "ALTER TABLE food_logs ADD COLUMN components TEXT"
+        )
+    }
+}
+
+@Database(
+    entities = [FoodLog::class, UserProfile::class, DailyActivity::class, ExerciseLog::class, ApiUsage::class],
+    version = 8,  // Version 8 for components field
+    exportSchema = false
+)
+@TypeConverters(Converters::class)
+abstract class AppDatabase : RoomDatabase() {
+    abstract fun foodLogDao(): FoodLogDao
+    abstract fun userProfileDao(): UserProfileDao
+    abstract fun dailyActivityDao(): DailyActivityDao
+    abstract fun exerciseLogDao(): ExerciseLogDao
+    abstract fun apiUsageDao(): ApiUsageDao
+
+    companion object {
+        @Volatile
+        private var INSTANCE: AppDatabase? = null
+
+        fun getDatabase(context: Context): AppDatabase {
+            return INSTANCE ?: synchronized(this) {
+                val instance = Room.databaseBuilder(
+                    context.applicationContext,
+                    AppDatabase::class.java,
+                    "nutritrack_database"
+                )
+                    .addMigrations(MIGRATION_7_8)  // Add the migration instead of destructive fallback
+                    .build()
+                INSTANCE = instance
+                instance
+            }
+        }
+    }
+}
