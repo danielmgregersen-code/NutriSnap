@@ -97,5 +97,7 @@ data class DailyActivity(
     val steps: Int = 0,
     val exerciseCalories: Int = 0,
     val weight: Double? = null,
-    val waterIntake: Int = 0 // ml
+    val waterIntake: Int = 0, // ml
+    val hrv: Double? = null,
+    val restingHR: Int? = null
 )

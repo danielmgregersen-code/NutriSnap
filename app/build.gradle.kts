@@ -37,6 +37,16 @@ android {
             "OPENAI_API_KEY",
             "\"${localProperties.getProperty("OPENAI_API_KEY", "")}\""
         )
+        buildConfigField(
+            "String",
+            "INTERVALS_API_KEY",
+            "\"${localProperties.getProperty("INTERVALS_API_KEY", "")}\""
+        )
+        buildConfigField(
+            "String",
+            "INTERVALS_ATHLETE_ID",
+            "\"${localProperties.getProperty("INTERVALS_ATHLETE_ID", "")}\""
+        )
     }
 
     buildTypes {

@@ -21,7 +21,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         exerciseLogDao = database.exerciseLogDao(),
         apiUsageDao = database.apiUsageDao(),
         openAIService = OpenAIService.create(),
-        apiKey = BuildConfig.OPENAI_API_KEY
+        apiKey = BuildConfig.OPENAI_API_KEY,
+        intervalsService = if (BuildConfig.INTERVALS_API_KEY.isNotBlank())
+            com.danielag_nutritrack.app.api.IntervalsService.create(BuildConfig.INTERVALS_API_KEY)
+        else null,
+        intervalsAthleteId = BuildConfig.INTERVALS_ATHLETE_ID
     )
 
     private val _uiState = MutableStateFlow(UiState())
@@ -53,6 +57,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _pendingAnalyzedFood = MutableStateFlow<AnalyzedFood?>(null)
     val pendingAnalyzedFood: StateFlow<AnalyzedFood?> = _pendingAnalyzedFood
+
+    private val _isSyncing = MutableStateFlow(false)
+    val isSyncing: StateFlow<Boolean> = _isSyncing.asStateFlow()
+
+    private val _syncMessage = MutableStateFlow<String?>(null)
+    val syncMessage: StateFlow<String?> = _syncMessage.asStateFlow()
+
+    val isIntervalsConfigured: Boolean
+        get() = BuildConfig.INTERVALS_API_KEY.isNotBlank() && BuildConfig.INTERVALS_ATHLETE_ID.isNotBlank()
 
     private var lastCheckedDate: Date? = null
 
@@ -514,12 +527,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 calendar.set(java.util.Calendar.SECOND, 0)
                 calendar.set(java.util.Calendar.MILLISECOND, 0)
 
+                val existing = _uiState.value.dailyActivity
                 val activity = DailyActivity(
                     date = calendar.time,
                     steps = steps,
                     exerciseCalories = exerciseCalories,
                     weight = weight,
-                    waterIntake = _uiState.value.dailyActivity?.waterIntake ?: 0 // Preserve water intake
+                    waterIntake = existing?.waterIntake ?: 0,
+                    hrv = existing?.hrv,
+                    restingHR = existing?.restingHR
                 )
 
                 repository.saveActivity(activity)
@@ -627,12 +643,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 calendar.set(java.util.Calendar.SECOND, 0)
                 calendar.set(java.util.Calendar.MILLISECOND, 0)
 
+                val existing = _uiState.value.dailyActivity
                 val activity = DailyActivity(
                     date = calendar.time,
                     steps = steps,
-                    exerciseCalories = 0, // No longer used, exercises logged separately
+                    exerciseCalories = 0,
                     weight = weight,
-                    waterIntake = _uiState.value.dailyActivity?.waterIntake ?: 0 // Preserve water intake
+                    waterIntake = existing?.waterIntake ?: 0,
+                    hrv = existing?.hrv,
+                    restingHR = existing?.restingHR
                 )
 
                 repository.saveActivity(activity)
@@ -663,12 +682,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 calendar.set(java.util.Calendar.SECOND, 0)
                 calendar.set(java.util.Calendar.MILLISECOND, 0)
 
+                val existing = _uiState.value.dailyActivity
                 val activity = DailyActivity(
                     date = calendar.time,
                     steps = steps,
-                    exerciseCalories = 0, // No longer used, exercises logged separately
+                    exerciseCalories = 0,
                     weight = weight,
-                    waterIntake = waterIntake
+                    waterIntake = waterIntake,
+                    hrv = existing?.hrv,
+                    restingHR = existing?.restingHR
                 )
 
                 repository.saveActivity(activity)
@@ -707,7 +729,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     steps = currentActivity?.steps ?: 0,
                     exerciseCalories = 0,
                     weight = currentActivity?.weight,
-                    waterIntake = newWaterIntake
+                    waterIntake = newWaterIntake,
+                    hrv = currentActivity?.hrv,
+                    restingHR = currentActivity?.restingHR
                 )
 
                 repository.saveActivity(activity)
@@ -722,6 +746,37 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
         }
+    }
+
+    fun syncFromIntervals() {
+        viewModelScope.launch {
+            _isSyncing.value = true
+            _syncMessage.value = null
+            try {
+                repository.syncFromIntervals(_selectedDate.value)
+                    .onSuccess { result ->
+                        val parts = mutableListOf<String>()
+                        result.steps?.let { parts.add("$it skridt") }
+                        result.weight?.let { parts.add("${"%.1f".format(it)} kg") }
+                        result.hrv?.let { parts.add("HRV ${"%.1f".format(it)}") }
+                        result.restingHR?.let { parts.add("RHR $it bpm") }
+                        if (result.activityCalories > 0) parts.add("${result.activityCalories} kcal aktivitet")
+                        _syncMessage.value = if (parts.isEmpty()) "Ingen data fra intervals.icu"
+                            else "Synkroniseret: ${parts.joinToString(", ")}"
+                        loadData()
+                        loadChartData()
+                    }
+                    .onFailure { e ->
+                        _syncMessage.value = "Synkronisering fejlede: ${e.message}"
+                    }
+            } finally {
+                _isSyncing.value = false
+            }
+        }
+    }
+
+    fun clearSyncMessage() {
+        _syncMessage.value = null
     }
 
     fun clearError() {

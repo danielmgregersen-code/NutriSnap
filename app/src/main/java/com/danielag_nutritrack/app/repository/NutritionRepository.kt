@@ -6,7 +6,18 @@ import com.google.gson.JsonSyntaxException
 import com.danielag_nutritrack.app.api.*
 import com.danielag_nutritrack.app.data.*
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
+import java.text.SimpleDateFormat
 import java.util.Date
+import java.util.Locale
+
+data class IntervalsSync(
+    val steps: Int?,
+    val weight: Double?,
+    val hrv: Double?,
+    val restingHR: Int?,
+    val activityCalories: Int
+)
 
 class NutritionRepository(
     private val foodLogDao: FoodLogDao,
@@ -15,7 +26,9 @@ class NutritionRepository(
     private val exerciseLogDao: ExerciseLogDao,
     private val apiUsageDao: ApiUsageDao,
     private val openAIService: OpenAIService,
-    private val apiKey: String
+    private val apiKey: String,
+    private val intervalsService: IntervalsService? = null,
+    private val intervalsAthleteId: String = ""
 ) {
     companion object {
         const val DAILY_API_LIMIT = 50 // Configurable daily limit
@@ -270,6 +283,54 @@ class NutritionRepository(
         } catch (e: Exception) {
             Log.e(TAG, "API call failed: ${e.message}", e)
             Result.failure(Exception("API call failed: ${e.message}"))
+        }
+    }
+
+    // Intervals.icu Integration
+    suspend fun syncFromIntervals(date: Date): Result<IntervalsSync> {
+        val service = intervalsService
+            ?: return Result.failure(Exception("Intervals.icu not configured"))
+        if (intervalsAthleteId.isBlank())
+            return Result.failure(Exception("Intervals.icu athlete ID not configured"))
+
+        return try {
+            val dateStr = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(date)
+            Log.d(TAG, "Syncing from intervals.icu for date: $dateStr athlete: $intervalsAthleteId")
+
+            // Fetch wellness data (steps, weight, HRV, RHR)
+            val wellness = service.getWellness(intervalsAthleteId, dateStr)
+            Log.d(TAG, "Wellness: steps=${wellness.steps}, weight=${wellness.weight}, hrv=${wellness.hrv}, rhr=${wellness.restingHR}")
+
+            // Fetch activities to sum calories
+            val activities = service.getActivities(intervalsAthleteId, dateStr, dateStr)
+            val activityCalories = activities.sumOf { it.calories ?: 0 }
+            Log.d(TAG, "Activities: ${activities.size} found, $activityCalories total calories")
+
+            // Load existing record to preserve fields not being synced (e.g. waterIntake)
+            val existing = dailyActivityDao.getActivityForDateSuspend(date.time)
+
+            val updated = (existing ?: DailyActivity(date = date)).copy(
+                steps = wellness.steps ?: existing?.steps ?: 0,
+                weight = wellness.weight?.toDouble() ?: existing?.weight,
+                exerciseCalories = if (activityCalories > 0) activityCalories else existing?.exerciseCalories ?: 0,
+                waterIntake = existing?.waterIntake ?: 0,
+                hrv = wellness.hrv?.toDouble() ?: existing?.hrv,
+                restingHR = wellness.restingHR ?: existing?.restingHR
+            )
+            dailyActivityDao.insertOrUpdate(updated)
+
+            Result.success(
+                IntervalsSync(
+                    steps = wellness.steps,
+                    weight = wellness.weight?.toDouble(),
+                    hrv = wellness.hrv?.toDouble(),
+                    restingHR = wellness.restingHR,
+                    activityCalories = activityCalories
+                )
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Intervals sync failed: ${e.message}", e)
+            Result.failure(e)
         }
     }
 

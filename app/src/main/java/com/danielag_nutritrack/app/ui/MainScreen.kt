@@ -19,6 +19,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import com.danielag_nutritrack.app.ui.ComponentEditScreen
@@ -42,6 +43,17 @@ fun MainScreen(viewModel: MainViewModel) {
     val monthlySummary by viewModel.monthlySummary.collectAsState()
     val summaryLoading by viewModel.summaryLoading.collectAsState()
     val pendingAnalyzedFood by viewModel.pendingAnalyzedFood.collectAsState()
+    val isSyncing by viewModel.isSyncing.collectAsState()
+    val syncMessage by viewModel.syncMessage.collectAsState()
+
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(syncMessage) {
+        syncMessage?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.clearSyncMessage()
+        }
+    }
 
     var showProfileDialog by remember { mutableStateOf(false) }
     var showAddFoodDialog by remember { mutableStateOf(false) }
@@ -68,6 +80,7 @@ fun MainScreen(viewModel: MainViewModel) {
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
@@ -80,6 +93,21 @@ fun MainScreen(viewModel: MainViewModel) {
                     }
                 },
                 actions = {
+                    if (viewModel.isIntervalsConfigured) {
+                        IconButton(
+                            onClick = { viewModel.syncFromIntervals() },
+                            enabled = !isSyncing
+                        ) {
+                            if (isSyncing) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    strokeWidth = 2.dp
+                                )
+                            } else {
+                                Icon(Icons.Default.Sync, "Sync fra intervals.icu")
+                            }
+                        }
+                    }
                     IconButton(onClick = { showDatePicker = true }) {
                         Icon(Icons.Default.CalendarToday, "Select Date")
                     }

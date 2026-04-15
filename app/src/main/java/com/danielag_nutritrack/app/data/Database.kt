@@ -113,6 +113,11 @@ interface DailyActivityDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertOrUpdate(activity: DailyActivity)
 
+    @Query("" +
+            "SELECT * FROM daily_activity " +
+            "WHERE DATE(date/1000, 'unixepoch', 'localtime') = DATE(:date/1000, 'unixepoch', 'localtime') LIMIT 1")
+    suspend fun getActivityForDateSuspend(date: Long): DailyActivity?
+
     @Query("SELECT * FROM daily_activity ORDER BY date DESC LIMIT 30")
     fun getRecentActivities(): Flow<List<DailyActivity>>
 
@@ -147,17 +152,21 @@ interface ExerciseLogDao {
 // Migration from version 7 to 8: Add components column to food_logs
 val MIGRATION_7_8 = object : Migration(7, 8) {
     override fun migrate(database: SupportSQLiteDatabase) {
-        // Add the components column to food_logs table
-        // It's nullable, so existing rows will have NULL for this column
-        database.execSQL(
-            "ALTER TABLE food_logs ADD COLUMN components TEXT"
-        )
+        database.execSQL("ALTER TABLE food_logs ADD COLUMN components TEXT")
+    }
+}
+
+// Migration from version 8 to 9: Add hrv and restingHR columns to daily_activity
+val MIGRATION_8_9 = object : Migration(8, 9) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL("ALTER TABLE daily_activity ADD COLUMN hrv REAL")
+        database.execSQL("ALTER TABLE daily_activity ADD COLUMN restingHR INTEGER")
     }
 }
 
 @Database(
     entities = [FoodLog::class, UserProfile::class, DailyActivity::class, ExerciseLog::class, ApiUsage::class],
-    version = 8,  // Version 8 for components field
+    version = 9,  // Version 9 for hrv/restingHR fields
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -179,7 +188,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "nutritrack_database"
                 )
-                    .addMigrations(MIGRATION_7_8)  // Add the migration instead of destructive fallback
+                    .addMigrations(MIGRATION_7_8, MIGRATION_8_9)
                     .build()
                 INSTANCE = instance
                 instance
