@@ -303,9 +303,11 @@ class NutritionRepository(
 
             // Fetch activities to sum calories
             val activities = service.getActivities(intervalsAthleteId, dateStr, dateStr)
+            // Exclude walks and hikes — their energy cost is already covered by the step bonus
+            val exerciseActivities = activities.filter { it.type !in setOf("Walk", "Hike") }
             // Prefer work (kJ) when available — 1 kJ ≈ 1 kcal at ~25% cycling efficiency
             // Fall back to calories field for activities without a power meter
-            val activityCalories = activities.sumOf { it.work?.toInt() ?: it.calories ?: 0 }
+            val activityCalories = exerciseActivities.sumOf { it.work?.toInt() ?: it.calories ?: 0 }
             Log.d(TAG, "Activities: ${activities.size} found, $activityCalories total calories")
 
             // Load existing record to preserve fields not being synced (e.g. waterIntake)
