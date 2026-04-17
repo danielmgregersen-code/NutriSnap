@@ -801,22 +801,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _isSyncing.value = true
             _syncMessage.value = null
             try {
-                repository.syncFromIntervals(_selectedDate.value)
-                    .onSuccess { result ->
-                        val parts = mutableListOf<String>()
-                        result.steps?.let { parts.add("$it skridt") }
-                        result.weight?.let { parts.add("${"%.1f".format(it)} kg") }
-                        result.hrv?.let { parts.add("HRV ${"%.1f".format(it)}") }
-                        result.restingHR?.let { parts.add("RHR $it bpm") }
-                        if (result.activityCalories > 0) parts.add("${result.activityCalories} kcal aktivitet")
-                        _syncMessage.value = if (parts.isEmpty()) "Ingen data fra intervals.icu"
-                            else "Synkroniseret: ${parts.joinToString(", ")}"
-                        loadData()
-                        loadChartData()
-                    }
-                    .onFailure { e ->
-                        _syncMessage.value = "Synkronisering fejlede: ${e.message}"
-                    }
+                // Sync the last 7 days to ensure we catch any data that arrived late
+                val calendar = java.util.Calendar.getInstance()
+                var firstError: String? = null
+                repeat(7) {
+                    val date = calendar.time
+                    repository.syncFromIntervals(date)
+                        .onFailure { e -> if (firstError == null) firstError = e.message }
+                    calendar.add(java.util.Calendar.DAY_OF_YEAR, -1)
+                }
+
+                if (firstError != null) {
+                    _syncMessage.value = "Synkronisering fejlede: $firstError"
+                }
+                loadData()
+                loadChartData()
             } finally {
                 _isSyncing.value = false
             }
