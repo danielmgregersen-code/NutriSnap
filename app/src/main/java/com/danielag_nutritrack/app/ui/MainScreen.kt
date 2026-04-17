@@ -680,6 +680,9 @@ fun DailyStatsCard(
 
 @Composable
 fun MacrosCard(uiState: UiState) {
+    val currentWeight = uiState.dailyActivity?.weight ?: uiState.userProfile?.weight ?: 0.0
+    val proteinGoal = if (currentWeight > 0) currentWeight * 1.6 else null
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -696,7 +699,7 @@ fun MacrosCard(uiState: UiState) {
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
-                MacroItem("Protein", uiState.totalProtein, "🥩")
+                MacroItem("Protein", uiState.totalProtein, "🥩", goal = proteinGoal)
                 MacroItem("Carbs", uiState.totalCarbs, "🍞")
                 MacroItem("Fats", uiState.totalFats, "🥑")
             }
@@ -845,11 +848,39 @@ fun CustomWaterDialog(
 }
 
 @Composable
-fun MacroItem(name: String, amount: Double, emoji: String) {
+fun MacroItem(name: String, amount: Double, emoji: String, goal: Double? = null) {
+    val progress = if (goal != null && goal > 0) (amount / goal).toFloat().coerceIn(0f, 1f) else null
+    val goalMet = progress != null && progress >= 1f
+    val ringColor = if (goalMet) Color(0xFF4CAF50) else MaterialTheme.colorScheme.primary
+
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(emoji, style = MaterialTheme.typography.headlineMedium)
-        Text("${amount.toInt()}g", style = MaterialTheme.typography.titleMedium)
+        Box(contentAlignment = Alignment.Center) {
+            if (progress != null) {
+                CircularProgressIndicator(
+                    progress = { progress },
+                    modifier = Modifier.size(88.dp),
+                    strokeWidth = 5.dp,
+                    color = ringColor,
+                    trackColor = ringColor.copy(alpha = 0.15f)
+                )
+            }
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(if (progress != null) 8.dp else 0.dp)
+            ) {
+                Text(emoji, style = MaterialTheme.typography.headlineMedium)
+                Text("${amount.toInt()}g", style = MaterialTheme.typography.titleMedium)
+            }
+        }
+        Spacer(modifier = Modifier.height(4.dp))
         Text(name, style = MaterialTheme.typography.bodySmall)
+        if (goal != null) {
+            Text(
+                "${amount.toInt()}/${goal.toInt()}g",
+                style = MaterialTheme.typography.bodySmall,
+                color = if (goalMet) Color(0xFF4CAF50) else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }
 
