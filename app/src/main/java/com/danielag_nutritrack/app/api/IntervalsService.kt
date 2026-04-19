@@ -26,6 +26,7 @@ data class IntervalsActivity(
     @SerializedName("start_date_local") val startDateLocal: String? = null,
     val type: String? = null,
     val calories: Int? = null,
+    @SerializedName(value = "work", alternate = ["Work", "kilojoules", "kj", "work_kj"])
     val work: Double? = null,  // Mechanical work in kJ; ~1 kJ ≈ 1 kcal at 25% efficiency
     @SerializedName("moving_time") val movingTime: Int? = null
 )
@@ -61,6 +62,13 @@ interface IntervalsService {
                         .header("Authorization", credentials)
                         .build()
                     chain.proceed(request)
+                }
+                .addInterceptor { chain ->
+                    // TEMPORARY: log response body to diagnose work field
+                    val response = chain.proceed(chain.request())
+                    val body = response.peekBody(4000).string()
+                    android.util.Log.d("IntervalsResponse", body)
+                    response
                 }
                 .connectTimeout(30, TimeUnit.SECONDS)
                 .readTimeout(30, TimeUnit.SECONDS)
