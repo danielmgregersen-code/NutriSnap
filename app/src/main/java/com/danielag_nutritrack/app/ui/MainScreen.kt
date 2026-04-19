@@ -590,19 +590,12 @@ fun DailyStatsCard(
 
             Spacer(modifier = Modifier.height(4.dp))
 
-            // Metrics line
-            val steps = uiState.dailyActivity?.steps ?: 0
-            val stepCalories = if (steps > 5000) (steps * 0.042).toInt() else 0
-            val totalExerciseCalories = (uiState.caloriesBurned - uiState.tdee).toInt()
-
-            Text(
-                "Burned: ${uiState.caloriesBurned.toInt()} | BMR: ${uiState.bmr.toInt()}",
-                style = MaterialTheme.typography.bodySmall
-            )
-            Text(
-                "Steps: $stepCalories kcal | Exercise: $totalExerciseCalories kcal",
-                style = MaterialTheme.typography.bodySmall
-            )
+            // TDEE breakdown
+            TdeeBreakdownRow("Burned (TDEE)", uiState.caloriesBurned)
+            TdeeBreakdownRow("BMR", uiState.bmr)
+            TdeeBreakdownRow("Steps (NEAT)", uiState.neat)
+            TdeeBreakdownRow("Exercise (EAT)", uiState.eat)
+            TdeeBreakdownRow("Digestion (TEF)", uiState.tef)
 
             Spacer(modifier = Modifier.height(8.dp))
 
@@ -646,6 +639,19 @@ fun DailyStatsCard(
                 Text("Update Steps, Weight & Water")
             }
         }
+    }
+}
+
+@Composable
+private fun TdeeBreakdownRow(label: String, value: Double) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 1.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("${value.toInt()} kcal", style = MaterialTheme.typography.bodySmall)
     }
 }
 

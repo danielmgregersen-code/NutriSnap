@@ -304,9 +304,9 @@ class NutritionRepository(
             val activities = service.getActivities(intervalsAthleteId, dateStr, dateStr)
             // Exclude walks and hikes — their energy cost is already covered by the step bonus
             val exerciseActivities = activities.filter { it.type !in setOf("Walk", "Hike") }
-            // Use work (kJ) when available; fall back to calories for activities without it
-            val activityCalories = exerciseActivities.sumOf { it.work?.toInt() ?: it.calories ?: 0 }
-            Log.d(TAG, "Activities: ${activities.size} found, $activityCalories total calories")
+            // Only use work (kJ) — calories field is not used
+            val activityCalories = exerciseActivities.sumOf { it.work?.toInt() ?: 0 }
+            Log.d(TAG, "Activities: ${activities.size} found, work-based kJ total: $activityCalories (work fields: ${exerciseActivities.map { "${it.name}=>${it.work}" }})")
 
             // Load existing record to preserve fields not being synced (e.g. waterIntake)
             val existing = dailyActivityDao.getActivityForDateSuspend(date.time)
