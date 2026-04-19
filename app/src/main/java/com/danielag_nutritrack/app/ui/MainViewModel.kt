@@ -190,12 +190,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     // Get food logs for this date
                     val logs = repository.getLogsForDate(activity.date).first()
                     val consumed = logs.sumOf { it.calories }
+                    val protein = logs.sumOf { it.protein }
+                    val carbs = logs.sumOf { it.carbs }
+                    val fat = logs.sumOf { it.fats }
 
                     calorieData.add(
                         CalorieDataPoint(
                             date = activity.date,
                             consumed = consumed,
-                            burned = calculateCaloriesBurned(activity)
+                            burned = calculateCaloriesBurned(activity, protein, carbs, fat)
                         )
                     )
                 }
@@ -205,10 +208,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private fun calculateCaloriesBurned(activity: DailyActivity): Double {
+    private fun calculateCaloriesBurned(
+        activity: DailyActivity,
+        protein: Double = 0.0,
+        carbs: Double = 0.0,
+        fat: Double = 0.0
+    ): Double {
         val profile = _uiState.value.userProfile ?: return 0.0
-        val tdee = repository.calculateTDEE(profile, activity.steps)
-        return tdee + activity.exerciseCalories
+        val weight = activity.weight ?: _weightHistory.value.lastOrNull()?.weight ?: profile.weight
+        val bmr = calculateBMRWithWeight(profile, weight)
+        val neat = 0.04 * weight * (activity.steps / 100.0)
+        val tef = (protein * 1.0) + (carbs * 0.3) + (fat * 0.135)
+        return bmr + neat + activity.exerciseCalories + tef
     }
 
     private fun calculateDailyStats() {
@@ -230,10 +241,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             ?: profile.weight
 
         val bmr = calculateBMRWithWeight(profile, currentWeight)
-        val tdee = calculateTDEEWithWeight(profile, currentWeight, steps)
-        val baseTargetCalories = calculateTargetCaloriesWithWeight(profile, currentWeight, steps)
-        val targetCalories = baseTargetCalories + exerciseCalories
-        val caloriesBurned = tdee + exerciseCalories
+        val neat = 0.04 * currentWeight * (steps / 100.0)
+        val tef = (totalProtein * 1.0) + (totalCarbs * 0.3) + (totalFats * 0.135)
+        val tdee = bmr + neat   // stored in UiState as the passive/movement component
+        val caloriesBurned = bmr + neat + exerciseCalories + tef
+        val targetCalories = caloriesBurned + goalCalorieAdjustment(profile)
 
         val netCalories = totalCaloriesConsumed - caloriesBurned
 
@@ -262,11 +274,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    // Returns BMR + NEAT only. Callers add EAT and TEF when those are available.
     private fun calculateTDEEWithWeight(profile: UserProfile, weight: Double, steps: Int = 0): Double {
         val bmr = calculateBMRWithWeight(profile, weight)
-        val baseActiveCalories = 350.0
-        val stepCalories = if (steps > 5000) steps * 0.042 else 0.0
-        return bmr + baseActiveCalories + stepCalories
+        val neat = 0.04 * weight * (steps / 100.0)
+        return bmr + neat
+    }
+
+    private fun goalCalorieAdjustment(profile: UserProfile): Double {
+        val rate = when (profile.weightChangeRate) {
+            WeightChangeRate.RATE_025 -> 275.0
+            WeightChangeRate.RATE_050 -> 550.0
+            WeightChangeRate.RATE_075 -> 825.0
+            WeightChangeRate.RATE_100 -> 1100.0
+        }
+        return when (profile.goal) {
+            Goal.MAINTAIN    -> 0.0
+            Goal.LOSE_WEIGHT -> -rate
+            Goal.GAIN_MUSCLE -> +rate
+        }
     }
 
     private fun calculateTargetCaloriesWithWeight(profile: UserProfile, weight: Double, steps: Int = 0): Double {
@@ -953,13 +979,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 // Update last known weight if available
                 activity?.weight?.let { lastKnownWeight = it }
 
-                // Calculate target using the weight for this day (or last known weight)
-                val baseTarget = calculateTargetCaloriesWithWeight(profile, lastKnownWeight, steps)
-                // Add exercise calories to target (like daily screen does)
-                val targetCalories = baseTarget + exerciseCalories
+                // Per-day macros for TEF
+                val dayProtein = foodLogs.sumOf { it.protein }
+                val dayCarbs = foodLogs.sumOf { it.carbs }
+                val dayFats = foodLogs.sumOf { it.fats }
+                val tef = (dayProtein * 1.0) + (dayCarbs * 0.3) + (dayFats * 0.135)
 
-                val tdee = calculateTDEEWithWeight(profile, lastKnownWeight, steps)
-                val burned = tdee + exerciseCalories
+                val bmr = calculateBMRWithWeight(profile, lastKnownWeight)
+                val neat = 0.04 * lastKnownWeight * (steps / 100.0)
+                val burned = bmr + neat + exerciseCalories + tef
+
+                // Calculate target using the full TDEE + goal adjustment
+                val targetCalories = burned + goalCalorieAdjustment(profile)
 
                 totalCaloriesBurned += burned
 

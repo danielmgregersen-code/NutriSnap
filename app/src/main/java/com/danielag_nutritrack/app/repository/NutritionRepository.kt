@@ -128,12 +128,11 @@ class NutritionRepository(
     }
 
     // Calculate TDEE (Total Daily Energy Expenditure)
-    // Garmin-style: BMR + fixed base active calories + step bonus above 5,000 steps threshold
+    // TDEE base = BMR + NEAT. EAT and TEF are added by callers that have the full context.
     fun calculateTDEE(profile: UserProfile, steps: Int = 0): Double {
         val bmr = calculateBMR(profile)
-        val baseActiveCalories = 350.0
-        val stepCalories = if (steps > 5000) steps * 0.042 else 0.0
-        return bmr + baseActiveCalories + stepCalories
+        val neat = 0.04 * profile.weight * (steps / 100.0)
+        return bmr + neat
     }
 
     // Calculate target calories based on goal and rate
