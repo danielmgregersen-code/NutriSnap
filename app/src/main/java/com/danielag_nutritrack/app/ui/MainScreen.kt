@@ -39,7 +39,6 @@ import androidx.lifecycle.LifecycleEventObserver
 fun MainScreen(viewModel: MainViewModel) {
     val uiState by viewModel.uiState.collectAsState()
     val weightHistory by viewModel.weightHistory.collectAsState()
-    val calorieHistory by viewModel.calorieHistory.collectAsState()
     val exerciseLogs by viewModel.exerciseLogs.collectAsState()
     val remainingApiCalls by viewModel.remainingApiCalls.collectAsState()
     val weeklySummary by viewModel.weeklySummary.collectAsState()
@@ -62,8 +61,6 @@ fun MainScreen(viewModel: MainViewModel) {
     var showProfileDialog by remember { mutableStateOf(false) }
     var showAddFoodDialog by remember { mutableStateOf(false) }
     var showExerciseDialog by remember { mutableStateOf(false) }
-    var showChartsDialog by remember { mutableStateOf(false) }
-    var showDatePicker by remember { mutableStateOf(false) }
     var showStepsWeightDialog by remember { mutableStateOf(false) }
     var showSummaryDialog by remember { mutableStateOf(false) }
     var showCamera by remember { mutableStateOf(false) }
@@ -124,14 +121,8 @@ fun MainScreen(viewModel: MainViewModel) {
                             }
                         }
                     }
-                    IconButton(onClick = { showDatePicker = true }) {
-                        Icon(Icons.Default.CalendarToday, "Select Date")
-                    }
                     IconButton(onClick = { showSummaryDialog = true }) {
                         Icon(Icons.Default.Summarize, "Summary")
-                    }
-                    IconButton(onClick = { showChartsDialog = true }) {
-                        Icon(Icons.Default.ShowChart, "Charts")
                     }
                     IconButton(onClick = { showProfileDialog = true }) {
                         Icon(Icons.Default.Settings, "Settings")
@@ -259,8 +250,7 @@ fun MainScreen(viewModel: MainViewModel) {
                             MiniWeightChartWithTarget(
                                 weightHistory = weightHistory,
                                 currentDayActivity = uiState.dailyActivity,
-                                targetWeight = uiState.userProfile?.targetWeight,
-                                onClick = { showChartsDialog = true }
+                                targetWeight = uiState.userProfile?.targetWeight
                             )
                         }
                     }
@@ -446,14 +436,6 @@ fun MainScreen(viewModel: MainViewModel) {
             )
         }
 
-        if (showChartsDialog) {
-            ChartsDialog(
-                weightHistory = weightHistory,
-                calorieHistory = calorieHistory,
-                onDismiss = { showChartsDialog = false }
-            )
-        }
-
         if (showSummaryDialog) {
             SummaryDialog(
                 onDismiss = { showSummaryDialog = false },
@@ -462,17 +444,6 @@ fun MainScreen(viewModel: MainViewModel) {
                 weeklySummary = weeklySummary,
                 monthlySummary = monthlySummary,
                 isLoading = summaryLoading
-            )
-        }
-
-        if (showDatePicker) {
-            DatePickerDialog(
-                currentDate = viewModel.selectedDate.collectAsState().value,
-                onDateSelected = { date ->
-                    viewModel.changeSelectedDate(date)
-                    showDatePicker = false
-                },
-                onDismiss = { showDatePicker = false }
             )
         }
 
@@ -1066,14 +1037,12 @@ fun FoodLogCard(
 fun MiniWeightChartWithTarget(
     weightHistory: List<DailyActivity>,
     currentDayActivity: DailyActivity?,
-    targetWeight: Double?,
-    onClick: () -> Unit
+    targetWeight: Double?
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .height(140.dp),
-        onClick = onClick,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant
         ),
@@ -1158,13 +1127,6 @@ fun MiniWeightChartWithTarget(
                 }
             }
 
-            Spacer(modifier = Modifier.height(4.dp))
-
-            Text(
-                "Tap to see detailed charts",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.secondary
-            )
         }
     }
 }
