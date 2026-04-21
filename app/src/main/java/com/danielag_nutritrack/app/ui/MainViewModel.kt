@@ -193,12 +193,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     val protein = logs.sumOf { it.protein }
                     val carbs = logs.sumOf { it.carbs }
                     val fat = logs.sumOf { it.fats }
+                    val exerciseCal = repository.getExercisesForDate(activity.date).first().sumOf { it.caloriesBurned }.toDouble()
 
                     calorieData.add(
                         CalorieDataPoint(
                             date = activity.date,
                             consumed = consumed,
-                            burned = calculateCaloriesBurned(activity, protein, carbs, fat)
+                            burned = calculateCaloriesBurned(activity, exerciseCal, protein, carbs, fat)
                         )
                     )
                 }
@@ -210,6 +211,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun calculateCaloriesBurned(
         activity: DailyActivity,
+        exerciseCalories: Double = 0.0,
         protein: Double = 0.0,
         carbs: Double = 0.0,
         fat: Double = 0.0
@@ -219,7 +221,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val bmr = calculateBMRWithWeight(profile, weight)
         val neat = 0.04 * weight * (activity.steps / 100.0)
         val tef = (protein * 1.0) + (carbs * 0.3) + (fat * 0.135)
-        return bmr + neat + activity.exerciseCalories + tef
+        return bmr + neat + exerciseCalories + tef
     }
 
     private fun calculateDailyStats() {
@@ -232,9 +234,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val totalFats = state.foodLogs.sumOf { it.fats }
 
         val steps = state.dailyActivity?.steps ?: 0
-        val manualExerciseCalories = _exerciseLogs.value.sumOf { it.caloriesBurned }
-        val intervalsExerciseCalories = (state.dailyActivity?.exerciseCalories ?: 0).toDouble()
-        val exerciseCalories = manualExerciseCalories + intervalsExerciseCalories
+        val exerciseCalories = _exerciseLogs.value.sumOf { it.caloriesBurned }.toDouble()
 
         val currentWeight = state.dailyActivity?.weight
             ?: _weightHistory.value.lastOrNull()?.weight

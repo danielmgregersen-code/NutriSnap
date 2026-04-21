@@ -304,9 +304,28 @@ class NutritionRepository(
             val activities = service.getActivities(intervalsAthleteId, dateStr, dateStr)
             // Exclude walks and hikes — their energy cost is already covered by the step bonus
             val exerciseActivities = activities.filter { it.type !in setOf("Walk", "Hike") }
-            // icu_joules / 1000 = kJ, used 1:1 as kcal
-            val activityCalories = exerciseActivities.sumOf { (it.icuJoules ?: 0L) / 1000 }.toInt()
-            Log.d(TAG, "Activities: ${activities.size} found, icu_joules total kcal: $activityCalories (fields: ${exerciseActivities.map { "${it.name}=>${it.icuJoules}" }})")
+            Log.d(TAG, "Activities: ${activities.size} found (fields: ${exerciseActivities.map { "${it.name}=>icu_joules=${it.icuJoules} calories=${it.calories}" }})")
+
+            // Replace existing intervals exercises for this date with fresh data
+            exerciseLogDao.deleteIntervalsExercisesForDate(date.time)
+            var activityCalories = 0
+            for (activity in exerciseActivities) {
+                val kcal = if (activity.icuJoules != null) {
+                    (activity.icuJoules / 1000).toInt()
+                } else {
+                    ((activity.calories ?: 0) * 0.9).toInt()
+                }
+                activityCalories += kcal
+                exerciseLogDao.insert(
+                    com.danielag_nutritrack.app.data.ExerciseLog(
+                        exerciseType = activity.name ?: activity.type ?: "Activity",
+                        caloriesBurned = kcal,
+                        timestamp = date,
+                        duration = activity.movingTime?.let { it / 60 },
+                        notes = "intervals:${activity.id}"
+                    )
+                )
+            }
 
             // Load existing record to preserve fields not being synced (e.g. waterIntake)
             val existing = dailyActivityDao.getActivityForDateSuspend(date.time)
@@ -314,7 +333,7 @@ class NutritionRepository(
             val updated = (existing ?: DailyActivity(date = date)).copy(
                 steps = wellness.steps ?: existing?.steps ?: 0,
                 weight = wellness.weight?.toDouble() ?: existing?.weight,
-                exerciseCalories = if (activityCalories > 0) activityCalories else existing?.exerciseCalories ?: 0,
+                exerciseCalories = 0, // EAT now comes from ExerciseLog entries
                 waterIntake = existing?.waterIntake ?: 0,
                 hrv = wellness.hrv?.toDouble() ?: existing?.hrv,
                 restingHR = wellness.restingHR ?: existing?.restingHR

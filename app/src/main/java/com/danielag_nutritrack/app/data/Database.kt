@@ -147,6 +147,13 @@ interface ExerciseLogDao {
 
     @Update
     suspend fun update(exercise: ExerciseLog)
+
+    @Query(
+        "DELETE FROM exercise_logs " +
+        "WHERE DATE(timestamp/1000, 'unixepoch', 'localtime') = DATE(:date/1000, 'unixepoch', 'localtime') " +
+        "AND notes LIKE 'intervals:%'"
+    )
+    suspend fun deleteIntervalsExercisesForDate(date: Long)
 }
 
 // Migration from version 7 to 8: Add components column to food_logs

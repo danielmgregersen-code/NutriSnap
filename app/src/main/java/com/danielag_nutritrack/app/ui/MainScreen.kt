@@ -1274,7 +1274,7 @@ fun ExerciseLogCard(exercise: ExerciseLog, onEdit: (ExerciseLog) -> Unit, onDele
                         color = MaterialTheme.colorScheme.onTertiaryContainer
                     )
                 }
-                exercise.notes?.let {
+                exercise.notes?.takeUnless { it.startsWith("intervals:") }?.let {
                     Text(
                         it,
                         style = MaterialTheme.typography.bodySmall,
