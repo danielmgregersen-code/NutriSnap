@@ -27,8 +27,8 @@ class NutritionRepository(
     private val apiUsageDao: ApiUsageDao,
     private val openAIService: OpenAIService,
     private val apiKey: String,
-    private val intervalsService: IntervalsService? = null,
-    private val intervalsAthleteId: String = ""
+    private var intervalsService: IntervalsService? = null,
+    private var intervalsAthleteId: String = ""
 ) {
     companion object {
         const val DAILY_API_LIMIT = 50 // Configurable daily limit
@@ -286,6 +286,11 @@ class NutritionRepository(
     }
 
     // Intervals.icu Integration
+    fun updateIntervalsConfig(apiKey: String, athleteId: String) {
+        intervalsAthleteId = athleteId
+        intervalsService = IntervalsService.create(apiKey)
+    }
+
     suspend fun syncFromIntervals(date: Date): Result<IntervalsSync> {
         val service = intervalsService
             ?: return Result.failure(Exception("Intervals.icu not configured"))

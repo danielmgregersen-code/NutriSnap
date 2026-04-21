@@ -45,6 +45,8 @@ fun ProfileDialog(
     var weightChangeRate by remember { mutableStateOf(profile?.weightChangeRate ?: WeightChangeRate.RATE_050) }
     var waterGoal by remember { mutableStateOf(profile?.waterGoal?.toString() ?: "2000") }
     var targetWeight by remember { mutableStateOf(profile?.targetWeight?.toString() ?: "") }
+    var intervalsAthleteId by remember { mutableStateOf(profile?.intervalsAthleteId ?: "") }
+    var intervalsApiKey by remember { mutableStateOf(profile?.intervalsApiKey ?: "") }
 
     var genderExpanded by remember { mutableStateOf(false) }
     var activityExpanded by remember { mutableStateOf(false) }
@@ -240,6 +242,29 @@ fun ProfileDialog(
                     placeholder = { Text("e.g., 2000 (Recommended: 2000-3000)") },
                     modifier = Modifier.fillMaxWidth()
                 )
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                Text(
+                    "Intervals.icu (optional)",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                OutlinedTextField(
+                    value = intervalsAthleteId,
+                    onValueChange = { intervalsAthleteId = it },
+                    label = { Text("Athlete ID") },
+                    placeholder = { Text("e.g., i12345") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                OutlinedTextField(
+                    value = intervalsApiKey,
+                    onValueChange = { intervalsApiKey = it },
+                    label = { Text("API Key") },
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         },
         confirmButton = {
@@ -254,7 +279,9 @@ fun ProfileDialog(
                         goal = goal,
                         weightChangeRate = weightChangeRate,
                         waterGoal = waterGoal.toIntOrNull() ?: 2000,
-                        targetWeight = targetWeight.toDoubleOrNull()  // ADD THIS LINE
+                        targetWeight = targetWeight.toDoubleOrNull(),
+                        intervalsAthleteId = intervalsAthleteId.trim().takeIf { it.isNotBlank() },
+                        intervalsApiKey = intervalsApiKey.trim().takeIf { it.isNotBlank() }
                     )
                 )
             }) {

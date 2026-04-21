@@ -70,7 +70,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val syncMessage: StateFlow<String?> = _syncMessage.asStateFlow()
 
     val isIntervalsConfigured: Boolean
-        get() = BuildConfig.INTERVALS_API_KEY.isNotBlank() && BuildConfig.INTERVALS_ATHLETE_ID.isNotBlank()
+        get() {
+            val profile = _uiState.value.userProfile
+            val profileKey = profile?.intervalsApiKey
+            val profileId = profile?.intervalsAthleteId
+            return (!profileKey.isNullOrBlank() && !profileId.isNullOrBlank()) ||
+                (BuildConfig.INTERVALS_API_KEY.isNotBlank() && BuildConfig.INTERVALS_ATHLETE_ID.isNotBlank())
+        }
 
     private var lastCheckedDate: Date? = null
 
@@ -93,6 +99,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             repository.getUserProfile().collect { profile ->
                 _uiState.update { it.copy(userProfile = profile) }
                 if (profile != null) {
+                    applyIntervalsConfig(profile)
                     calculateDailyStats()
                 }
             }
@@ -574,11 +581,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    private fun applyIntervalsConfig(profile: UserProfile) {
+        val key = profile.intervalsApiKey?.takeIf { it.isNotBlank() }
+            ?: BuildConfig.INTERVALS_API_KEY.takeIf { it.isNotBlank() }
+        val id = profile.intervalsAthleteId?.takeIf { it.isNotBlank() }
+            ?: BuildConfig.INTERVALS_ATHLETE_ID.takeIf { it.isNotBlank() }
+        if (!key.isNullOrBlank() && !id.isNullOrBlank()) {
+            repository.updateIntervalsConfig(key, id)
+        }
+    }
+
     fun saveUserProfile(profile: UserProfile) {
         viewModelScope.launch {
             try {
                 android.util.Log.d("NutriTrack", "Saving profile: $profile")
                 repository.saveUserProfile(profile)
+                applyIntervalsConfig(profile)
                 android.util.Log.d("NutriTrack", "Profile saved successfully")
                 // Force reload to update UI
                 loadData()

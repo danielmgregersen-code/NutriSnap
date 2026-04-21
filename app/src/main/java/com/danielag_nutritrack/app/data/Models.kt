@@ -68,7 +68,9 @@ data class UserProfile(
     val goal: Goal,
     val weightChangeRate: WeightChangeRate = WeightChangeRate.RATE_050, // Default 0.5 kg/week
     val waterGoal: Int = 2000, // Daily water goal in ml, default 2L
-    val targetWeight: Double? = null // Target weight in kg (optional)
+    val targetWeight: Double? = null, // Target weight in kg (optional)
+    val intervalsApiKey: String? = null,
+    val intervalsAthleteId: String? = null
 )
 
 enum class Gender { MALE, FEMALE }

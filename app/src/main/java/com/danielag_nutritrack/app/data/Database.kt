@@ -171,9 +171,17 @@ val MIGRATION_8_9 = object : Migration(8, 9) {
     }
 }
 
+// Migration from version 9 to 10: Add intervals.icu credentials to user_profile
+val MIGRATION_9_10 = object : Migration(9, 10) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL("ALTER TABLE user_profile ADD COLUMN intervalsApiKey TEXT")
+        database.execSQL("ALTER TABLE user_profile ADD COLUMN intervalsAthleteId TEXT")
+    }
+}
+
 @Database(
     entities = [FoodLog::class, UserProfile::class, DailyActivity::class, ExerciseLog::class, ApiUsage::class],
-    version = 9,  // Version 9 for hrv/restingHR fields
+    version = 10,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -195,7 +203,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "nutritrack_database"
                 )
-                    .addMigrations(MIGRATION_7_8, MIGRATION_8_9)
+                    .addMigrations(MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
                     .build()
                 INSTANCE = instance
                 instance
