@@ -1,11 +1,15 @@
 package com.danielag_nutritrack.app.ui
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -309,10 +313,13 @@ fun getActivityLevelLabel(level: ActivityLevel): String {
 @Composable
 fun AddFoodDialog(
     remainingCalls: Int,
+    favorites: List<com.danielag_nutritrack.app.data.FavoriteMeal> = emptyList(),
     onDismiss: () -> Unit,
     onAnalyzeText: (String) -> Unit,
     onAnalyzeImage: (String) -> Unit,  // Keep this for compatibility but won't be used
     onManualEntry: (String, Double, Double?, Double?, Double?, MealCategory, String?) -> Unit,
+    onAddFromFavorite: (com.danielag_nutritrack.app.data.FavoriteMeal) -> Unit = {},
+    onDeleteFavorite: (com.danielag_nutritrack.app.data.FavoriteMeal) -> Unit = {},
     onCameraClick: () -> Unit,
     onGalleryClick: () -> Unit
 ) {
@@ -357,21 +364,10 @@ fun AddFoodDialog(
 
                 // Tabs
                 TabRow(selectedTabIndex = selectedTab) {
-                    Tab(
-                        selected = selectedTab == 0,
-                        onClick = { selectedTab = 0 },
-                        text = { Text("Text") }
-                    )
-                    Tab(
-                        selected = selectedTab == 1,
-                        onClick = { selectedTab = 1 },
-                        text = { Text("Image") }
-                    )
-                    Tab(
-                        selected = selectedTab == 2,
-                        onClick = { selectedTab = 2 },
-                        text = { Text("Manual") }
-                    )
+                    Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text("Text") })
+                    Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text("Image") })
+                    Tab(selected = selectedTab == 2, onClick = { selectedTab = 2 }, text = { Text("Manual") })
+                    Tab(selected = selectedTab == 3, onClick = { selectedTab = 3 }, text = { Text("Favorites") })
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -421,6 +417,76 @@ fun AddFoodDialog(
                             }
                         }
                     }
+                    3 -> {
+                        // Favorites tab
+                        if (favorites.isEmpty()) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(160.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Icon(
+                                        Icons.Default.Bookmark,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(40.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(
+                                        "No favorites yet",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Text(
+                                        "Tap ☆ on any meal to save it",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(max = 320.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                items(favorites, key = { it.id }) { fav ->
+                                    Card(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                                        )
+                                    ) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(fav.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                                                Text(
+                                                    "${fav.calories.toInt()} cal  •  P:${fav.protein.toInt()}g  C:${fav.carbs.toInt()}g  F:${fav.fats.toInt()}g",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                            IconButton(onClick = { onAddFromFavorite(fav); onDismiss() }) {
+                                                Icon(Icons.Default.Bookmark, "Add", tint = MaterialTheme.colorScheme.primary)
+                                            }
+                                            IconButton(onClick = { onDeleteFavorite(fav) }) {
+                                                Icon(Icons.Default.Delete, "Remove favorite", tint = MaterialTheme.colorScheme.error)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     2 -> {
                         // Manual entry tab
                         Column(

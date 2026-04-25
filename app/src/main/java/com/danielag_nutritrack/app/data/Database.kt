@@ -171,6 +171,18 @@ val MIGRATION_8_9 = object : Migration(8, 9) {
     }
 }
 
+@Dao
+interface FavoriteMealDao {
+    @Query("SELECT * FROM favorite_meals ORDER BY name ASC")
+    fun getAllFavorites(): Flow<List<FavoriteMeal>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(favorite: FavoriteMeal): Long
+
+    @Delete
+    suspend fun delete(favorite: FavoriteMeal)
+}
+
 // Migration from version 9 to 10: Add intervals.icu credentials to user_profile
 val MIGRATION_9_10 = object : Migration(9, 10) {
     override fun migrate(database: SupportSQLiteDatabase) {
@@ -179,9 +191,26 @@ val MIGRATION_9_10 = object : Migration(9, 10) {
     }
 }
 
+// Migration from version 10 to 11: Add favorite_meals table
+val MIGRATION_10_11 = object : Migration(10, 11) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL(
+            "CREATE TABLE IF NOT EXISTS favorite_meals (" +
+            "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+            "name TEXT NOT NULL, " +
+            "calories REAL NOT NULL, " +
+            "protein REAL NOT NULL, " +
+            "carbs REAL NOT NULL, " +
+            "fats REAL NOT NULL, " +
+            "category TEXT NOT NULL, " +
+            "notes TEXT)"
+        )
+    }
+}
+
 @Database(
-    entities = [FoodLog::class, UserProfile::class, DailyActivity::class, ExerciseLog::class, ApiUsage::class],
-    version = 10,
+    entities = [FoodLog::class, UserProfile::class, DailyActivity::class, ExerciseLog::class, ApiUsage::class, FavoriteMeal::class],
+    version = 11,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -191,6 +220,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun dailyActivityDao(): DailyActivityDao
     abstract fun exerciseLogDao(): ExerciseLogDao
     abstract fun apiUsageDao(): ApiUsageDao
+    abstract fun favoriteMealDao(): FavoriteMealDao
 
     companion object {
         @Volatile
@@ -203,7 +233,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "nutritrack_database"
                 )
-                    .addMigrations(MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
+                    .addMigrations(MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)
                     .build()
                 INSTANCE = instance
                 instance

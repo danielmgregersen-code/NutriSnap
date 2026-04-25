@@ -48,6 +48,7 @@ fun MainScreen(viewModel: MainViewModel) {
     val isSyncing by viewModel.isSyncing.collectAsState()
     val syncMessage by viewModel.syncMessage.collectAsState()
     val isRefining by viewModel.isRefining.collectAsState()
+    val favoriteMeals by viewModel.favoriteMeals.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -267,7 +268,8 @@ fun MainScreen(viewModel: MainViewModel) {
                         FoodLogCard(
                             log = log,
                             onEdit = { editingFoodLog = it },
-                            onDelete = { viewModel.deleteLog(it) }
+                            onDelete = { viewModel.deleteLog(it) },
+                            onSaveAsFavorite = { viewModel.saveFavoriteFromLog(it) }
                         )
                     }
 
@@ -308,6 +310,7 @@ fun MainScreen(viewModel: MainViewModel) {
         if (showAddFoodDialog) {
             AddFoodDialog(
                 remainingCalls = remainingApiCalls,
+                favorites = favoriteMeals,
                 onDismiss = { showAddFoodDialog = false },
                 onAnalyzeText = { text ->
                     viewModel.analyzeTextFood(text)
@@ -319,6 +322,12 @@ fun MainScreen(viewModel: MainViewModel) {
                 onManualEntry = { name, calories, protein, carbs, fats, category, notes ->
                     viewModel.addManualFood(name, calories, protein, carbs, fats, category, notes)
                     showAddFoodDialog = false
+                },
+                onAddFromFavorite = { fav ->
+                    viewModel.logFromFavorite(fav)
+                },
+                onDeleteFavorite = { fav ->
+                    viewModel.deleteFavorite(fav)
                 },
                 onCameraClick = {
                     showAddFoodDialog = false
@@ -365,6 +374,7 @@ fun MainScreen(viewModel: MainViewModel) {
                 notes = analyzed.notes,
                 isRefining = isRefining,
                 onRefine = { viewModel.refineFood(it) },
+                onSaveAsFavorite = { viewModel.saveFavoriteFromPending() },
                 onConfirm = { viewModel.savePendingFood() },
                 onDismiss = { viewModel.clearPendingFood() }
             )
@@ -866,6 +876,7 @@ fun FoodLogCard(
     log: FoodLog,
     onEdit: (FoodLog) -> Unit,
     onDelete: (FoodLog) -> Unit,
+    onSaveAsFavorite: (FoodLog) -> Unit = {},
 ) {
     val dateFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
     var isExpanded by remember { mutableStateOf(false) }
@@ -903,6 +914,9 @@ fun FoodLogCard(
                 }
 
                 Row {
+                    IconButton(onClick = { onSaveAsFavorite(log) }) {
+                        Icon(Icons.Default.Bookmark, "Save as Favorite", tint = MaterialTheme.colorScheme.primary)
+                    }
                     IconButton(onClick = { onEdit(log) }) {
                         Icon(Icons.Default.Edit, "Edit")
                     }

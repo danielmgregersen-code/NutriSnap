@@ -25,6 +25,7 @@ class NutritionRepository(
     private val dailyActivityDao: DailyActivityDao,
     private val exerciseLogDao: ExerciseLogDao,
     private val apiUsageDao: ApiUsageDao,
+    private val favoriteMealDao: FavoriteMealDao,
     private val openAIService: OpenAIService,
     private val apiKey: String,
     private var intervalsService: IntervalsService? = null,
@@ -284,6 +285,11 @@ class NutritionRepository(
             Result.failure(Exception("API call failed: ${e.message}"))
         }
     }
+
+    // Favorite Meals
+    fun getAllFavorites(): Flow<List<com.danielag_nutritrack.app.data.FavoriteMeal>> = favoriteMealDao.getAllFavorites()
+    suspend fun insertFavorite(favorite: com.danielag_nutritrack.app.data.FavoriteMeal) = favoriteMealDao.insert(favorite)
+    suspend fun deleteFavorite(favorite: com.danielag_nutritrack.app.data.FavoriteMeal) = favoriteMealDao.delete(favorite)
 
     // Intervals.icu Integration
     fun updateIntervalsConfig(apiKey: String, athleteId: String) {

@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.*
@@ -29,6 +30,7 @@ fun FoodReviewDialog(
     notes: String?,
     isRefining: Boolean = false,
     onRefine: (String) -> Unit = {},
+    onSaveAsFavorite: () -> Unit = {},
     onConfirm: () -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -61,8 +63,13 @@ fun FoodReviewDialog(
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold
                     )
-                    IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.Close, "Close")
+                    Row {
+                        IconButton(onClick = onSaveAsFavorite) {
+                            Icon(Icons.Default.Bookmark, "Save as Favorite", tint = MaterialTheme.colorScheme.primary)
+                        }
+                        IconButton(onClick = onDismiss) {
+                            Icon(Icons.Default.Close, "Close")
+                        }
                     }
                 }
 

@@ -6,6 +6,7 @@ import com.danielag_nutritrack.app.api.OpenAIService
 import com.danielag_nutritrack.app.data.*
 import com.danielag_nutritrack.app.repository.NutritionRepository
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.launch
 import java.util.Date
 import com.danielag_nutritrack.app.BuildConfig
@@ -20,6 +21,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         dailyActivityDao = database.dailyActivityDao(),
         exerciseLogDao = database.exerciseLogDao(),
         apiUsageDao = database.apiUsageDao(),
+        favoriteMealDao = database.favoriteMealDao(),
         openAIService = OpenAIService.create(),
         apiKey = BuildConfig.OPENAI_API_KEY,
         intervalsService = if (BuildConfig.INTERVALS_API_KEY.isNotBlank())
@@ -65,6 +67,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _isSyncing = MutableStateFlow(false)
     val isSyncing: StateFlow<Boolean> = _isSyncing.asStateFlow()
+
+    val favoriteMeals: StateFlow<List<com.danielag_nutritrack.app.data.FavoriteMeal>> =
+        repository.getAllFavorites()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _syncMessage = MutableStateFlow<String?>(null)
     val syncMessage: StateFlow<String?> = _syncMessage.asStateFlow()
@@ -578,6 +584,59 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     it.copy(error = "Error adding food: ${e.message}")
                 }
             }
+        }
+    }
+
+    fun saveFavoriteFromLog(log: com.danielag_nutritrack.app.data.FoodLog) {
+        viewModelScope.launch {
+            repository.insertFavorite(
+                com.danielag_nutritrack.app.data.FavoriteMeal(
+                    name = log.name,
+                    calories = log.calories,
+                    protein = log.protein,
+                    carbs = log.carbs,
+                    fats = log.fats,
+                    category = log.category,
+                    notes = null
+                )
+            )
+        }
+    }
+
+    fun saveFavoriteFromPending() {
+        val pending = _pendingAnalyzedFood.value ?: return
+        viewModelScope.launch {
+            repository.insertFavorite(
+                com.danielag_nutritrack.app.data.FavoriteMeal(
+                    name = pending.name,
+                    calories = pending.calories,
+                    protein = pending.protein,
+                    carbs = pending.carbs,
+                    fats = pending.fats,
+                    category = com.danielag_nutritrack.app.data.MealCategory.SNACK
+                )
+            )
+        }
+    }
+
+    fun deleteFavorite(favorite: com.danielag_nutritrack.app.data.FavoriteMeal) {
+        viewModelScope.launch { repository.deleteFavorite(favorite) }
+    }
+
+    fun logFromFavorite(favorite: com.danielag_nutritrack.app.data.FavoriteMeal) {
+        viewModelScope.launch {
+            repository.insertLog(
+                com.danielag_nutritrack.app.data.FoodLog(
+                    name = favorite.name,
+                    calories = favorite.calories,
+                    protein = favorite.protein,
+                    carbs = favorite.carbs,
+                    fats = favorite.fats,
+                    category = favorite.category,
+                    timestamp = java.util.Date(),
+                    notes = null
+                )
+            )
         }
     }
 

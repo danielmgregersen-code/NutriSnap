@@ -47,6 +47,18 @@ enum class MealCategory {
     BREAKFAST, LUNCH, DINNER, SNACK, FRUIT, TRAINING
 }
 
+@Entity(tableName = "favorite_meals")
+data class FavoriteMeal(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val name: String,
+    val calories: Double,
+    val protein: Double,
+    val carbs: Double,
+    val fats: Double,
+    val category: MealCategory,
+    val notes: String? = null
+)
+
 @Entity(tableName = "exercise_logs")
 data class ExerciseLog(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
