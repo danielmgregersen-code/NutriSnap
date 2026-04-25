@@ -215,7 +215,7 @@ class NutritionRepository(
             """.trimIndent()
 
             val request = OpenAIRequest(
-                model = "gpt-5.4",
+                model = "gpt-5.5",
                 messages = listOf(
                     Message(
                         role = "user",
@@ -409,7 +409,7 @@ class NutritionRepository(
             """.trimIndent()
 
             val request = OpenAIRequest(
-                model = "gpt-5.4",
+                model = "gpt-5.5",
                 messages = listOf(
                     Message(
                         role = "user",
@@ -486,7 +486,7 @@ class NutritionRepository(
             }
 
             val request = OpenAIRequest(
-                model = "gpt-5.4",
+                model = "gpt-5.5",
                 messages = conversationMessages,
                 maxTokens = 10000
             )
