@@ -23,8 +23,8 @@ android {
         applicationId = "com.danielag_nutritrack.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 13 // Update for every publishing
-        versionName = "1.0"
+        versionCode = 23 // Update for every publishing
+        versionName = "1.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
