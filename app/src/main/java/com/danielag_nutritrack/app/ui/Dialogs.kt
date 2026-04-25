@@ -369,8 +369,8 @@ fun AddFoodDialog(
                 ) {
                     Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text("Text") })
                     Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text("Image") })
-                    Tab(selected = selectedTab == 2, onClick = { selectedTab = 2 }, text = { Text("Manual") })
-                    Tab(selected = selectedTab == 3, onClick = { selectedTab = 3 }, text = { Text("Saved") })
+                    Tab(selected = selectedTab == 2, onClick = { selectedTab = 2 }, text = { Text("Saved") })
+                    Tab(selected = selectedTab == 3, onClick = { selectedTab = 3 }, text = { Text("Manual") })
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -420,8 +420,8 @@ fun AddFoodDialog(
                             }
                         }
                     }
-                    3 -> {
-                        // Favorites tab
+                    2 -> {
+                        // Saved (favorites) tab
                         if (favorites.isEmpty()) {
                             Box(
                                 modifier = Modifier
@@ -490,7 +490,7 @@ fun AddFoodDialog(
                         }
                     }
 
-                    2 -> {
+                    3 -> {
                         // Manual entry tab
                         Column(
                             modifier = Modifier
@@ -601,7 +601,7 @@ fun AddFoodDialog(
                                         onAnalyzeText(textInput)
                                     }
                                 }
-                                2 -> {
+                                3 -> {
                                     val cal = calories.toDoubleOrNull()
                                     if (name.isNotBlank() && cal != null) {
                                         onManualEntry(
@@ -620,13 +620,13 @@ fun AddFoodDialog(
                         modifier = Modifier.weight(1f),
                         enabled = when (selectedTab) {
                             0 -> textInput.isNotBlank() && remainingCalls > 0
-                            2 -> name.isNotBlank() && calories.toDoubleOrNull() != null
+                            3 -> name.isNotBlank() && calories.toDoubleOrNull() != null
                             else -> false
                         }
                     ) {
                         Text(when (selectedTab) {
                             0 -> "Analyze"
-                            2 -> "Add"
+                            3 -> "Add"
                             else -> "Add"
                         })
                     }
