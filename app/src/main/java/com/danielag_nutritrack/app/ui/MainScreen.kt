@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.Bookmark
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -265,11 +266,14 @@ fun MainScreen(viewModel: MainViewModel) {
                     }
 
                     items(uiState.foodLogs.reversed()) { log ->
+                        val matchingFav = favoriteMeals.firstOrNull { it.name == log.name }
                         FoodLogCard(
                             log = log,
                             onEdit = { editingFoodLog = it },
                             onDelete = { viewModel.deleteLog(it) },
-                            onSaveAsFavorite = { viewModel.saveFavoriteFromLog(it) }
+                            matchingFavorite = matchingFav,
+                            onSaveAsFavorite = { viewModel.saveFavoriteFromLog(it) },
+                            onRemoveFromFavorite = { viewModel.deleteFavorite(it) }
                         )
                     }
 
@@ -876,7 +880,9 @@ fun FoodLogCard(
     log: FoodLog,
     onEdit: (FoodLog) -> Unit,
     onDelete: (FoodLog) -> Unit,
+    matchingFavorite: com.danielag_nutritrack.app.data.FavoriteMeal? = null,
     onSaveAsFavorite: (FoodLog) -> Unit = {},
+    onRemoveFromFavorite: (com.danielag_nutritrack.app.data.FavoriteMeal) -> Unit = {},
 ) {
     val dateFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
     var isExpanded by remember { mutableStateOf(false) }
@@ -914,8 +920,15 @@ fun FoodLogCard(
                 }
 
                 Row {
-                    IconButton(onClick = { onSaveAsFavorite(log) }) {
-                        Icon(Icons.Default.Bookmark, "Save as Favorite", tint = MaterialTheme.colorScheme.primary)
+                    IconButton(onClick = {
+                        if (matchingFavorite != null) onRemoveFromFavorite(matchingFavorite)
+                        else onSaveAsFavorite(log)
+                    }) {
+                        if (matchingFavorite != null) {
+                            Icon(Icons.Default.Bookmark, "Remove from Favorites", tint = MaterialTheme.colorScheme.primary)
+                        } else {
+                            Icon(Icons.Outlined.Bookmark, "Save as Favorite", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     }
                     IconButton(onClick = { onEdit(log) }) {
                         Icon(Icons.Default.Edit, "Edit")

@@ -363,11 +363,14 @@ fun AddFoodDialog(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 // Tabs
-                TabRow(selectedTabIndex = selectedTab) {
+                ScrollableTabRow(
+                    selectedTabIndex = selectedTab,
+                    edgePadding = 0.dp
+                ) {
                     Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text("Text") })
                     Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text("Image") })
                     Tab(selected = selectedTab == 2, onClick = { selectedTab = 2 }, text = { Text("Manual") })
-                    Tab(selected = selectedTab == 3, onClick = { selectedTab = 3 }, text = { Text("Favorites") })
+                    Tab(selected = selectedTab == 3, onClick = { selectedTab = 3 }, text = { Text("Saved") })
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
