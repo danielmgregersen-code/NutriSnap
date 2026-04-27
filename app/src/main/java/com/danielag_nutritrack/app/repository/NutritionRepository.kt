@@ -73,9 +73,6 @@ class NutritionRepository(
     suspend fun saveActivity(activity: DailyActivity) =
         dailyActivityDao.insertOrUpdate(activity)
 
-    fun getRecentActivities(): Flow<List<DailyActivity>> =
-        dailyActivityDao.getRecentActivities()
-
     fun getWeightHistory(): Flow<List<DailyActivity>> =
         dailyActivityDao.getWeightHistory()
 

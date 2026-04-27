@@ -133,11 +133,6 @@ dependencies {
     // JSON - Gson
     implementation("com.google.code.gson:gson:2.10.1")
 
-    // Charts - Vico
-    implementation("com.patrykandpatrick.vico:compose:1.13.1")
-    implementation("com.patrykandpatrick.vico:compose-m3:1.13.1")
-    implementation("com.patrykandpatrick.vico:core:1.13.1")
-
     // Testing
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")

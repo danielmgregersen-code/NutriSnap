@@ -118,9 +118,6 @@ interface DailyActivityDao {
             "WHERE DATE(date/1000, 'unixepoch', 'localtime') = DATE(:date/1000, 'unixepoch', 'localtime') LIMIT 1")
     suspend fun getActivityForDateSuspend(date: Long): DailyActivity?
 
-    @Query("SELECT * FROM daily_activity ORDER BY date DESC LIMIT 30")
-    fun getRecentActivities(): Flow<List<DailyActivity>>
-
     @Query("SELECT * FROM daily_activity WHERE weight IS NOT NULL ORDER BY date DESC LIMIT 30")
     fun getWeightHistory(): Flow<List<DailyActivity>>
 

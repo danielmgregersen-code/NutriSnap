@@ -39,9 +39,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _weightHistory = MutableStateFlow<List<DailyActivity>>(emptyList())
     val weightHistory: StateFlow<List<DailyActivity>> = _weightHistory.asStateFlow()
 
-    private val _calorieHistory = MutableStateFlow<List<CalorieDataPoint>>(emptyList())
-    val calorieHistory: StateFlow<List<CalorieDataPoint>> = _calorieHistory.asStateFlow()
-
     private val _exerciseLogs = MutableStateFlow<List<ExerciseLog>>(emptyList())
     val exerciseLogs: StateFlow<List<ExerciseLog>> = _exerciseLogs.asStateFlow()
 
@@ -88,9 +85,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         loadData()
-        loadChartData()
+        loadWeightHistory()
         loadApiUsage()
         lastCheckedDate = getTodayDate()
+    }
+
+    private fun loadWeightHistory() {
+        viewModelScope.launch {
+            repository.getWeightHistory().collect { activities ->
+                _weightHistory.value = activities.sortedBy { it.date }
+            }
+        }
     }
 
     private fun loadApiUsage() {
@@ -186,57 +191,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 cal1.get(java.util.Calendar.DAY_OF_YEAR) == cal2.get(java.util.Calendar.DAY_OF_YEAR)
     }
 
-    private fun loadChartData() {
-        viewModelScope.launch {
-            // Load weight history
-            repository.getWeightHistory().collect { activities ->
-                _weightHistory.value = activities.sortedBy { it.date }
-            }
-        }
-
-        viewModelScope.launch {
-            // Load calorie history (last 30 days)
-            repository.getRecentActivities().collect { activities ->
-                val calorieData = mutableListOf<CalorieDataPoint>()
-
-                activities.sortedByDescending { it.date }.take(30).reversed().forEach { activity ->
-                    // Get food logs for this date
-                    val logs = repository.getLogsForDate(activity.date).first()
-                    val consumed = logs.sumOf { it.calories }
-                    val protein = logs.sumOf { it.protein }
-                    val carbs = logs.sumOf { it.carbs }
-                    val fat = logs.sumOf { it.fats }
-                    val exerciseCal = repository.getExercisesForDate(activity.date).first().sumOf { it.caloriesBurned }.toDouble()
-
-                    calorieData.add(
-                        CalorieDataPoint(
-                            date = activity.date,
-                            consumed = consumed,
-                            burned = calculateCaloriesBurned(activity, exerciseCal, protein, carbs, fat)
-                        )
-                    )
-                }
-
-                _calorieHistory.value = calorieData
-            }
-        }
-    }
-
-    private fun calculateCaloriesBurned(
-        activity: DailyActivity,
-        exerciseCalories: Double = 0.0,
-        protein: Double = 0.0,
-        carbs: Double = 0.0,
-        fat: Double = 0.0
-    ): Double {
-        val profile = _uiState.value.userProfile ?: return 0.0
-        val weight = activity.weight ?: _weightHistory.value.lastOrNull()?.weight ?: profile.weight
-        val bmr = calculateBMRWithWeight(profile, weight)
-        val neat = 0.04 * weight * (activity.steps / 100.0)
-        val tef = (protein * 1.0) + (carbs * 0.3) + (fat * 0.135)
-        return bmr + neat + exerciseCalories + tef
-    }
-
     private fun calculateDailyStats() {
         val state = _uiState.value
         val profile = state.userProfile ?: return
@@ -256,7 +210,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val bmr = calculateBMRWithWeight(profile, currentWeight)
         val neat = 0.04 * currentWeight * (steps / 100.0)
         val tef = (totalProtein * 1.0) + (totalCarbs * 0.3) + (totalFats * 0.135)
-        val tdee = bmr + neat   // stored in UiState as the passive/movement component
         val caloriesBurned = bmr + neat + exerciseCalories + tef
         val targetCalories = caloriesBurned + goalCalorieAdjustment(profile)
 
@@ -272,7 +225,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 neat = neat,
                 eat = exerciseCalories,
                 tef = tef,
-                tdee = tdee,
                 targetCalories = targetCalories,
                 caloriesBurned = caloriesBurned,
                 netCalories = netCalories
@@ -625,6 +577,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun logFromFavorite(favorite: com.danielag_nutritrack.app.data.FavoriteMeal) {
         viewModelScope.launch {
+            val calendar = java.util.Calendar.getInstance()
+            calendar.time = _selectedDate.value
+            calendar.set(java.util.Calendar.HOUR_OF_DAY, 0)
+            calendar.set(java.util.Calendar.MINUTE, 0)
+            calendar.set(java.util.Calendar.SECOND, 0)
+            calendar.set(java.util.Calendar.MILLISECOND, 0)
+
             repository.insertLog(
                 com.danielag_nutritrack.app.data.FoodLog(
                     name = favorite.name,
@@ -633,21 +592,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     carbs = favorite.carbs,
                     fats = favorite.fats,
                     category = favorite.category,
-                    timestamp = java.util.Date(),
+                    timestamp = calendar.time,
                     notes = null
                 )
             )
         }
     }
 
+    private var lastAppliedIntervalsConfig: Pair<String, String>? = null
+
     private fun applyIntervalsConfig(profile: UserProfile) {
         val key = profile.intervalsApiKey?.takeIf { it.isNotBlank() }
             ?: BuildConfig.INTERVALS_API_KEY.takeIf { it.isNotBlank() }
         val id = profile.intervalsAthleteId?.takeIf { it.isNotBlank() }
             ?: BuildConfig.INTERVALS_ATHLETE_ID.takeIf { it.isNotBlank() }
-        if (!key.isNullOrBlank() && !id.isNullOrBlank()) {
-            repository.updateIntervalsConfig(key, id)
-        }
+        if (key.isNullOrBlank() || id.isNullOrBlank()) return
+        val pair = key to id
+        if (pair == lastAppliedIntervalsConfig) return
+        lastAppliedIntervalsConfig = pair
+        repository.updateIntervalsConfig(key, id)
     }
 
     fun saveUserProfile(profile: UserProfile) {
@@ -697,7 +660,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
                 // Force reload to update UI
                 loadData()
-                loadChartData()
             } catch (e: Exception) {
                 android.util.Log.e("NutriTrack", "Error saving activity: ${e.message}", e)
                 _uiState.update {
@@ -813,7 +775,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
                 // Force reload to update UI
                 loadData()
-                loadChartData()
             } catch (e: Exception) {
                 android.util.Log.e("NutriTrack", "Error updating steps/weight: ${e.message}", e)
                 _uiState.update {
@@ -852,7 +813,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
                 // Force reload to update UI
                 loadData()
-                loadChartData()
             } catch (e: Exception) {
                 android.util.Log.e("NutriTrack", "Error updating activity: ${e.message}", e)
                 _uiState.update {
@@ -903,6 +863,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun syncFromIntervals() {
+        if (_isSyncing.value) return
         viewModelScope.launch {
             _isSyncing.value = true
             _syncMessage.value = null
@@ -921,7 +882,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     _syncMessage.value = "Synkronisering fejlede: $firstError"
                 }
                 loadData()
-                loadChartData()
             } finally {
                 _isSyncing.value = false
             }
@@ -1158,12 +1118,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 }
 
-data class CalorieDataPoint(
-    val date: Date,
-    val consumed: Double,
-    val burned: Double
-)
-
 data class AnalyzedFood(
     val name: String,
     val calories: Double,
@@ -1187,7 +1141,6 @@ data class UiState(
     val neat: Double = 0.0,
     val eat: Double = 0.0,
     val tef: Double = 0.0,
-    val tdee: Double = 0.0,
     val targetCalories: Double = 0.0,
     val caloriesBurned: Double = 0.0,
     val netCalories: Double = 0.0,
