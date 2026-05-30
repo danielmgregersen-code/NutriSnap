@@ -649,28 +649,24 @@ fun getMealCategoryLabel(category: MealCategory): String {
 
 @Composable
 fun ImagePickerScreen(
-    onImageSelected: (String) -> Unit,
+    onImageSelected: (String, String?) -> Unit,
     onDismiss: () -> Unit
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
+    var selectedBase64 by remember { mutableStateOf<String?>(null) }
+    var contextText by remember { mutableStateOf("") }
 
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri ->
         if (uri != null) {
             try {
-                // Convert URI to base64
                 val inputStream = context.contentResolver.openInputStream(uri)
                 val bitmap = BitmapFactory.decodeStream(inputStream)
                 inputStream?.close()
-
-                // Compress and convert to base64
                 val outputStream = ByteArrayOutputStream()
                 bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 80, outputStream)
-                val byteArray = outputStream.toByteArray()
-                val base64 = Base64.encodeToString(byteArray, Base64.DEFAULT)
-
-                onImageSelected(base64)
+                selectedBase64 = Base64.encodeToString(outputStream.toByteArray(), Base64.DEFAULT)
             } catch (e: Exception) {
                 android.util.Log.e("ImagePicker", "Error processing image: ${e.message}")
                 onDismiss()
@@ -680,32 +676,65 @@ fun ImagePickerScreen(
         }
     }
 
-    // Launch picker immediately when this composable is shown
     LaunchedEffect(Unit) {
-        launcher.launch(
-            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-        )
+        launcher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
     }
 
-    // Show a loading dialog while picker is open
     Dialog(onDismissRequest = onDismiss) {
-        Card(
-            modifier = Modifier.padding(16.dp)
-        ) {
-            Column(
-                modifier = Modifier.padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Icon(
-                    Icons.Default.PhotoLibrary,
-                    contentDescription = null,
-                    modifier = Modifier.size(48.dp)
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                Text("Select a photo from your gallery")
-                Spacer(modifier = Modifier.height(16.dp))
-                TextButton(onClick = onDismiss) {
-                    Text("Cancel")
+        Card(modifier = Modifier.padding(16.dp)) {
+            if (selectedBase64 != null) {
+                // Image selected — show context input before analyzing
+                Column(
+                    modifier = Modifier.padding(24.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        "Photo selected",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    OutlinedTextField(
+                        value = contextText,
+                        onValueChange = { contextText = it },
+                        label = { Text("Context (optional)") },
+                        placeholder = { Text("e.g. large portion, homemade") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = onDismiss,
+                            modifier = Modifier.weight(1f)
+                        ) { Text("Cancel") }
+                        Button(
+                            onClick = {
+                                onImageSelected(
+                                    selectedBase64!!,
+                                    contextText.trim().takeIf { it.isNotBlank() }
+                                )
+                            },
+                            modifier = Modifier.weight(1f)
+                        ) { Text("Analyze") }
+                    }
+                }
+            } else {
+                // Waiting for picker
+                Column(
+                    modifier = Modifier.padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(
+                        Icons.Default.PhotoLibrary,
+                        contentDescription = null,
+                        modifier = Modifier.size(48.dp)
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("Select a photo from your gallery")
+                    Spacer(modifier = Modifier.height(16.dp))
+                    TextButton(onClick = onDismiss) { Text("Cancel") }
                 }
             }
         }

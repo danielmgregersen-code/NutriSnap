@@ -346,9 +346,9 @@ fun MainScreen(viewModel: MainViewModel) {
 
         if (showCamera) {
             CameraScreen(
-                onImageCaptured = { base64 ->
+                onImagesAndContextCaptured = { images, context ->
                     if (remainingApiCalls > 0) {
-                        viewModel.analyzeImageFood(base64)
+                        viewModel.analyzeImageFood(images, context)
                     }
                     showCamera = false
                 },
@@ -358,9 +358,9 @@ fun MainScreen(viewModel: MainViewModel) {
 
         if (showImagePicker) {
             ImagePickerScreen(
-                onImageSelected = { base64 ->
+                onImageSelected = { base64, context ->
                     if (remainingApiCalls > 0) {
-                        viewModel.analyzeImageFood(base64)
+                        viewModel.analyzeImageFood(listOf(base64), context)
                     }
                     showImagePicker = false
                 },

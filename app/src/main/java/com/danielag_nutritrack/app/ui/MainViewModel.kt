@@ -400,14 +400,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun analyzeImageFood(base64Image: String) {
+    fun analyzeImageFood(base64Images: List<String>, textContext: String? = null) {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
 
             try {
-                android.util.Log.d("NutriTrack", "Starting image analysis")
+                android.util.Log.d("NutriTrack", "Starting image analysis (${base64Images.size} image(s))")
 
-                repository.analyzeImageFood(base64Image)
+                repository.analyzeImageFood(base64Images, textContext)
                     .onSuccess { nutritionInfo ->
                         android.util.Log.d("NutriTrack", "Got image response: ${nutritionInfo.name} with ${nutritionInfo.components?.size ?: 0} components")
 

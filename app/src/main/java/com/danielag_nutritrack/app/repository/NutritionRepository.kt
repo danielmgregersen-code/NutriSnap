@@ -202,13 +202,13 @@ class NutritionRepository(
                 - Include serving size description AND weight (e.g., "tortilla (1 medium, 60g)")
                 - The weight field should be the numeric value only (e.g., 60, not "60g") - Break down the meal into individual ingredients
                 - Ensure component totals match the overall totals
-                - Use realistic portion estimates
+                - Use realistic European portion estimates — European servings are typically smaller than North American ones
                 - Confidence: 1-3=low, 4-7=medium, 8-10=high
                 - Text responses in Danish
-                
+
                 For "components", break down the meal into its individual ingredients with their amounts and nutritional values. Include amount in the key like "ingredient (amount)".
-                
-                Use reasonable estimates for a typical serving size.
+
+                Use reasonable estimates for a typical European serving size.
                 Provide a detailed 1-2 sentence description of the meal, including estimated portion size and key nutritional highlights.              
             """.trimIndent()
 
@@ -364,16 +364,32 @@ class NutritionRepository(
     }
 
     // OpenAI Integration - Image Analysis with Components
-    suspend fun analyzeImageFood(base64Image: String): Result<NutritionInfo> {
+    suspend fun analyzeImageFood(base64Images: List<String>, textContext: String? = null): Result<NutritionInfo> {
         return try {
             // Check API limit
             if (!canMakeApiCall()) {
                 return Result.failure(Exception("Daily API limit reached ($DAILY_API_LIMIT calls). Resets at midnight."))
             }
 
+            val multiImageNote = if (base64Images.size > 1)
+                "\n\nYou have been provided ${base64Images.size} photos of the same dish taken from different angles. Study all of them together to get a complete picture before estimating."
+            else ""
+
+            val contextNote = if (!textContext.isNullOrBlank())
+                "\n\nAdditional context from the user: \"$textContext\". Let this inform your analysis."
+            else ""
+
             val prompt = """
-                Analyze this food image and provide nutritional information with component breakdown in JSON format.
-                
+                Analyze this food image carefully and provide precise nutritional information in JSON format.
+
+                Examine the image(s) thoroughly before estimating:
+                - Identify every visible ingredient and component
+                - Estimate portion sizes by comparing to reference objects in the image (plate diameter, cutlery, hands, packaging)
+                - Account for the cooking method — oil used for frying, butter for sautéing, sauces, and dressings all add significant calories
+                - Consider density and preparation: a compact bowl of rice vs. a fluffy one, thick vs. thin meat cuts
+                - Assume European portion sizes — they are typically smaller than North American portions
+                - This data is used for real health tracking — accuracy matters$multiImageNote$contextNote
+
                 Respond ONLY with valid JSON in this exact format:
                 {
                   "name": "brief food name",
@@ -382,7 +398,7 @@ class NutritionRepository(
                   "protein": total_protein_grams,
                   "carbs": total_carbs_grams,
                   "fats": total_fats_grams,
-                  "weight": total_weight_in_grams
+                  "weight": total_weight_in_grams,
                   "category": "BREAKFAST|LUNCH|DINNER|SNACK|FRUIT|TRAINING",
                   "confidence": confidence_score_1_to_10,
                   "components": {
@@ -395,40 +411,37 @@ class NutritionRepository(
                     }
                   }
                 }
-                
+
                 CRITICAL REQUIREMENTS:
-                - Include NUMERIC weight in grams for each component
-                - Include serving size description AND weight (e.g., "tortilla (1 medium, 60g)")
-                - The weight field should be the numeric value only (e.g., 60, not "60g") - Break down the meal into individual ingredients
-                - Ensure component totals match the overall totals
-                - Use realistic portion estimates
-                - Confidence: 1-3=low, 4-7=medium, 8-10=high
+                - Include numeric weight in grams for each component (number only, not "60g")
+                - Include serving size in the component key, e.g. "chicken breast (150g)"
+                - Break the meal into every individual ingredient as its own component
+                - Ensure component totals sum to the overall totals
+                - Confidence: 1-3=low (unclear image/unusual dish), 4-7=medium, 8-10=high (clear image, well-known dish)
                 - Text responses in Danish
-                
-                For "components", break down the meal into its individual ingredients with their amounts and nutritional values. Include amount in the key like "ingredient (amount)".
-                
-                Estimate nutrition based on what you see in the image.
-                Provide a detailed 1-2 sentence description based on what you observe, including estimated portion size and any visible ingredients or preparation methods.
             """.trimIndent()
+
+            val contentList = mutableListOf<Content>()
+            contentList.add(Content(type = "text", text = prompt))
+            for (base64Image in base64Images) {
+                contentList.add(Content(
+                    type = "image_url",
+                    imageUrl = ImageUrl(url = "data:image/jpeg;base64,$base64Image")
+                ))
+            }
 
             val request = OpenAIRequest(
                 model = "gpt-5.5",
                 messages = listOf(
                     Message(
                         role = "user",
-                        content = listOf(
-                            Content(type = "text", text = prompt),
-                            Content(
-                                type = "image_url",
-                                imageUrl = ImageUrl(url = "data:image/jpeg;base64,$base64Image")
-                            )
-                        )
+                        content = contentList
                     )
                 ),
                 maxTokens = 10000
             )
 
-            Log.d(TAG, "Sending image analysis request to OpenAI")
+            Log.d(TAG, "Sending image analysis request to OpenAI (${base64Images.size} image(s))")
 
             val response = openAIService.analyzeFood(
                 authorization = "Bearer $apiKey",
