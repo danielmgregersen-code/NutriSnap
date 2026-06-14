@@ -27,8 +27,9 @@ data class IntervalsActivity(
     val type: String? = null,
     val calories: Int? = null,
     @SerializedName("icu_joules")
-    val icuJoules: Long? = null  // Total energy in joules; divide by 1000 to get kJ ≈ kcal
-    @SerializedName("moving_time") val movingTime: Int? = null
+    val icuJoules: Long? = null,  // Total energy in joules; divide by 1000 to get kJ ≈ kcal
+    @SerializedName("moving_time") val movingTime: Int? = null,
+    @SerializedName("average_cadence") val averageCadence: Int? = null
 )
 
 interface IntervalsService {

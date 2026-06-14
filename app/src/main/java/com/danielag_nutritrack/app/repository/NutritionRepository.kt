@@ -330,7 +330,7 @@ class NutritionRepository(
                         caloriesBurned = kcal,
                         timestamp = date,
                         duration = activity.movingTime?.let { it / 60 },
-                        notes = "intervals:${activity.id}"
+                        notes = "intervals:${activity.id}" + (activity.averageCadence?.let { ";cadence:$it" } ?: "")
                     )
                 )
             }

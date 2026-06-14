@@ -11,6 +11,8 @@ import kotlinx.coroutines.launch
 import java.util.Date
 import com.danielag_nutritrack.app.BuildConfig
 
+private const val FALLBACK_RUNNING_CADENCE_STEPS_PER_MINUTE = 165
+
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val database = AppDatabase.getDatabase(application)
@@ -191,6 +193,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 cal1.get(java.util.Calendar.DAY_OF_YEAR) == cal2.get(java.util.Calendar.DAY_OF_YEAR)
     }
 
+    // Estimate steps contributed by running-type exercises so they aren't double-counted
+    // in NEAT (the run's energy is already included via exerciseCalories). Prefer the
+    // synced average_cadence (steps-per-minute for one foot, so x2) when available;
+    // otherwise fall back to a typical recreational running cadence.
+    private fun estimateRunningSteps(log: ExerciseLog): Int {
+        if (!log.exerciseType.contains("run", ignoreCase = true)) return 0
+        val minutes = log.duration ?: return 0
+        val syncedCadence = log.notes
+            ?.substringAfter("cadence:", "")
+            ?.takeWhile { it.isDigit() }
+            ?.toIntOrNull()
+        val stepsPerMinute = syncedCadence?.let { it * 2 } ?: FALLBACK_RUNNING_CADENCE_STEPS_PER_MINUTE
+        return minutes * stepsPerMinute
+    }
+
+    private fun effectiveStepsForNeat(rawSteps: Int, exerciseLogs: List<ExerciseLog>): Int {
+        return (rawSteps - exerciseLogs.sumOf { estimateRunningSteps(it) }).coerceAtLeast(0)
+    }
+
     private fun calculateDailyStats() {
         val state = _uiState.value
         val profile = state.userProfile ?: return
@@ -200,7 +221,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val totalCarbs = state.foodLogs.sumOf { it.carbs }
         val totalFats = state.foodLogs.sumOf { it.fats }
 
-        val steps = state.dailyActivity?.steps ?: 0
+        val rawSteps = state.dailyActivity?.steps ?: 0
+        val steps = effectiveStepsForNeat(rawSteps, _exerciseLogs.value)
         val exerciseCalories = _exerciseLogs.value.sumOf { it.caloriesBurned }.toDouble()
 
         val currentWeight = state.dailyActivity?.weight
@@ -1013,8 +1035,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
                 // Get activity and exercises for this date
                 val activity = repository.getActivityForDate(currentDate).first()
-                val steps = activity?.steps ?: 0
-                val exerciseCalories = repository.getExercisesForDate(currentDate).first().sumOf { it.caloriesBurned }
+                val dayExerciseLogs = repository.getExercisesForDate(currentDate).first()
+                val steps = effectiveStepsForNeat(activity?.steps ?: 0, dayExerciseLogs)
+                val exerciseCalories = dayExerciseLogs.sumOf { it.caloriesBurned }
 
                 // Update last known weight if available
                 activity?.weight?.let { lastKnownWeight = it }
