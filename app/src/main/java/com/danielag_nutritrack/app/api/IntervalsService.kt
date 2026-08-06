@@ -29,7 +29,12 @@ data class IntervalsActivity(
     @SerializedName("icu_joules")
     val icuJoules: Long? = null,  // Total energy in joules; divide by 1000 to get kJ ≈ kcal
     @SerializedName("moving_time") val movingTime: Int? = null,
-    @SerializedName("average_cadence") val averageCadence: Float? = null
+    // Step-count inputs: the API has no step field on an activity, but cadence x moving_time
+    // and distance / stride both yield it (see StepEstimator).
+    @SerializedName("average_cadence") val averageCadence: Float? = null,
+    @SerializedName("average_stride") val averageStride: Float? = null,
+    val distance: Float? = null,       // metres
+    @SerializedName("icu_distance") val icuDistance: Float? = null
 )
 
 interface IntervalsService {

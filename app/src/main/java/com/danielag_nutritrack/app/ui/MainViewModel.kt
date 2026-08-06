@@ -10,8 +10,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.launch
 import java.util.Date
 import com.danielag_nutritrack.app.BuildConfig
-
-private const val FALLBACK_RUNNING_CADENCE_STEPS_PER_MINUTE = 165
+import com.danielag_nutritrack.app.utils.ExerciseNotes
+import com.danielag_nutritrack.app.utils.StepEstimator
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -193,23 +193,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 cal1.get(java.util.Calendar.DAY_OF_YEAR) == cal2.get(java.util.Calendar.DAY_OF_YEAR)
     }
 
-    // Estimate steps contributed by running-type exercises so they aren't double-counted
-    // in NEAT (the run's energy is already included via exerciseCalories). Prefer the
-    // synced average_cadence (steps-per-minute for one foot, so x2) when available;
-    // otherwise fall back to a typical recreational running cadence.
-    private fun estimateRunningSteps(log: ExerciseLog): Int {
-        if (!log.exerciseType.contains("run", ignoreCase = true)) return 0
-        val minutes = log.duration ?: return 0
-        val syncedCadence = log.notes
-            ?.substringAfter("cadence:", "")
-            ?.takeWhile { it.isDigit() }
-            ?.toIntOrNull()
-        val stepsPerMinute = syncedCadence?.let { it * 2 } ?: FALLBACK_RUNNING_CADENCE_STEPS_PER_MINUTE
-        return minutes * stepsPerMinute
+    // Steps taken during a logged exercise are already in the daily step total, and the
+    // exercise's energy is counted separately as EAT — so they must come out before NEAT is
+    // calculated. Synced activities carry the step count computed from the intervals.icu
+    // activity data; manual entries are estimated from duration and exercise type.
+    private fun stepsCoveredByExercise(log: ExerciseLog): Int {
+        ExerciseNotes.steps(log.notes)?.let { return it }
+        return StepEstimator.estimateSteps(
+            type = ExerciseNotes.activityType(log.notes),
+            name = log.exerciseType,
+            movingTimeSeconds = log.duration?.let { it * 60 }
+        )
     }
 
     private fun effectiveStepsForNeat(rawSteps: Int, exerciseLogs: List<ExerciseLog>): Int {
-        return (rawSteps - exerciseLogs.sumOf { estimateRunningSteps(it) }).coerceAtLeast(0)
+        return (rawSteps - exerciseLogs.sumOf { stepsCoveredByExercise(it) }).coerceAtLeast(0)
     }
 
     private fun calculateDailyStats() {
@@ -245,6 +243,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 totalFats = totalFats,
                 bmr = bmr,
                 neat = neat,
+                neatSteps = steps,
+                exerciseSteps = rawSteps - steps,
                 eat = exerciseCalories,
                 tef = tef,
                 targetCalories = targetCalories,
@@ -893,15 +893,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 // Sync the last 7 days to ensure we catch any data that arrived late
                 val calendar = java.util.Calendar.getInstance()
                 var firstError: String? = null
-                repeat(7) {
+                var todaySync: com.danielag_nutritrack.app.repository.IntervalsSync? = null
+                repeat(7) { dayIndex ->
                     val date = calendar.time
                     repository.syncFromIntervals(date)
+                        .onSuccess { sync -> if (dayIndex == 0) todaySync = sync }
                         .onFailure { e -> if (firstError == null) firstError = e.message }
                     calendar.add(java.util.Calendar.DAY_OF_YEAR, -1)
                 }
 
-                if (firstError != null) {
-                    _syncMessage.value = "Synkronisering fejlede: $firstError"
+                _syncMessage.value = when {
+                    firstError != null -> "Synkronisering fejlede: $firstError"
+                    todaySync != null -> {
+                        val sync = todaySync!!
+                        val steps = sync.steps ?: 0
+                        if (sync.activitySteps > 0)
+                            "Synkroniseret: $steps skridt (−${sync.activitySteps} fra træning)"
+                        else
+                            "Synkroniseret: $steps skridt"
+                    }
+                    else -> null
                 }
                 loadData()
             } finally {
@@ -1162,6 +1173,8 @@ data class UiState(
     val totalFats: Double = 0.0,
     val bmr: Double = 0.0,
     val neat: Double = 0.0,
+    val neatSteps: Int = 0,       // Steps actually counted towards NEAT
+    val exerciseSteps: Int = 0,   // Steps excluded because they happened during a logged exercise
     val eat: Double = 0.0,
     val tef: Double = 0.0,
     val targetCalories: Double = 0.0,

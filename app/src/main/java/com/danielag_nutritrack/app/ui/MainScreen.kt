@@ -639,10 +639,19 @@ fun DailyStatsCard(
                     Spacer(modifier = Modifier.width(1.dp))
                 }
 
-                Text(
-                    "Steps: ${uiState.dailyActivity?.steps ?: 0}",
-                    style = MaterialTheme.typography.bodyLarge
-                )
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        "Steps: ${uiState.dailyActivity?.steps ?: 0}",
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                    if (uiState.exerciseSteps > 0) {
+                        Text(
+                            "${uiState.neatSteps} in NEAT (−${uiState.exerciseSteps} from exercise)",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.secondary
+                        )
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(12.dp))

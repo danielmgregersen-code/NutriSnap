@@ -5,6 +5,8 @@ import com.google.gson.Gson
 import com.google.gson.JsonSyntaxException
 import com.danielag_nutritrack.app.api.*
 import com.danielag_nutritrack.app.data.*
+import com.danielag_nutritrack.app.utils.ExerciseNotes
+import com.danielag_nutritrack.app.utils.StepEstimator
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import java.text.SimpleDateFormat
@@ -16,7 +18,8 @@ data class IntervalsSync(
     val weight: Double?,
     val hrv: Double?,
     val restingHR: Int?,
-    val activityCalories: Int
+    val activityCalories: Int,
+    val activitySteps: Int = 0  // Steps taken during logged activities, excluded from NEAT
 )
 
 class NutritionRepository(
@@ -34,6 +37,49 @@ class NutritionRepository(
     companion object {
         const val DAILY_API_LIMIT = 50 // Configurable daily limit
         private const val TAG = "NutritionRepository"
+        private const val MODEL = "gpt-5.5"
+        private const val MAX_COMPLETION_TOKENS = 10000
+    }
+
+    // Sends a chat completion request and returns the assistant's reply.
+    private suspend fun requestAnalysis(messages: List<Message>): String {
+        return openAIService.requestCompletion(
+            apiKey = apiKey,
+            request = OpenAIRequest(
+                model = MODEL,
+                messages = messages,
+                maxTokens = MAX_COMPLETION_TOKENS
+            )
+        )
+    }
+
+    // Parses the model's reply into NutritionInfo, tolerating markdown code fences.
+    private fun parseNutritionInfo(content: String): Result<NutritionInfo> {
+        return try {
+            val jsonContent = content.trim()
+                .removePrefix("```json")
+                .removePrefix("```")
+                .removeSuffix("```")
+                .trim()
+
+            Log.d(TAG, "Attempting to parse JSON: $jsonContent")
+
+            val nutritionInfo = Gson().fromJson(jsonContent, NutritionInfo::class.java)
+            if (nutritionInfo == null) {
+                Log.e(TAG, "Parsed NutritionInfo is null")
+                Result.failure(Exception("Failed to parse nutrition information"))
+            } else {
+                Log.d(TAG, "Successfully parsed: ${nutritionInfo.name} with ${nutritionInfo.components?.size ?: 0} components")
+                Result.success(nutritionInfo)
+            }
+        } catch (e: JsonSyntaxException) {
+            Log.e(TAG, "JSON parsing error: ${e.message}")
+            Log.e(TAG, "Content that failed to parse: $content")
+            Result.failure(Exception("Failed to parse response: ${e.message}\nResponse: $content"))
+        } catch (e: Exception) {
+            Log.e(TAG, "Unexpected error during parsing: ${e.message}")
+            Result.failure(Exception("Failed to parse response: ${e.message}"))
+        }
     }
 
     // Food Logs
@@ -212,71 +258,20 @@ class NutritionRepository(
                 Provide a detailed 1-2 sentence description of the meal, including estimated portion size and key nutritional highlights.              
             """.trimIndent()
 
-            val request = OpenAIRequest(
-                model = "gpt-5.5",
-                messages = listOf(
-                    Message(
-                        role = "user",
-                        content = prompt
-                    )
-                ),
-                maxTokens = 10000
-            )
+            val messages = listOf(Message(role = "user", content = prompt))
 
             Log.d(TAG, "Sending request to OpenAI with description: $encodedDescription")
 
-            val response = openAIService.analyzeFood(
-                authorization = "Bearer $apiKey",
-                request = request
-            )
-
-            val content = response.choices.firstOrNull()?.message?.content
+            val content = requestAnalysis(messages)
 
             Log.d(TAG, "OpenAI raw response: $content")
 
-            when {
-                content == null -> {
-                    Log.e(TAG, "No response content from OpenAI")
-                    Result.failure(Exception("No response from OpenAI"))
-                }
-                content !is String -> {
-                    Log.e(TAG, "Response content is not a String: ${content.javaClass}")
-                    Result.failure(Exception("Invalid response format"))
-                }
-                else -> {
-                    // Store conversation for follow-up corrections
-                    lastConversationMessages = request.messages + Message(role = "assistant", content = content)
-                    try {
-                        // Try to extract JSON if it's wrapped in markdown code blocks
-                        val jsonContent = content.trim()
-                            .removePrefix("```json")
-                            .removePrefix("```")
-                            .removeSuffix("```")
-                            .trim()
+            // Store conversation for follow-up corrections
+            lastConversationMessages = messages + Message(role = "assistant", content = content)
 
-                        Log.d(TAG, "Attempting to parse JSON: $jsonContent")
-
-                        val nutritionInfo = Gson().fromJson(jsonContent, NutritionInfo::class.java)
-
-                        if (nutritionInfo == null) {
-                            Log.e(TAG, "Parsed NutritionInfo is null")
-                            Result.failure(Exception("Failed to parse nutrition information"))
-                        } else {
-                            Log.d(TAG, "Successfully parsed: ${nutritionInfo.name} with ${nutritionInfo.components?.size ?: 0} components")
-                            // Increment usage counter on success
-                            incrementApiUsage()
-                            Result.success(nutritionInfo)
-                        }
-                    } catch (e: JsonSyntaxException) {
-                        Log.e(TAG, "JSON parsing error: ${e.message}")
-                        Log.e(TAG, "Content that failed to parse: $content")
-                        Result.failure(Exception("Failed to parse response: ${e.message}\nResponse: $content"))
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Unexpected error during parsing: ${e.message}")
-                        Result.failure(Exception("Failed to parse response: ${e.message}"))
-                    }
-                }
-            }
+            val result = parseNutritionInfo(content)
+            if (result.isSuccess) incrementApiUsage()
+            result
         } catch (e: Exception) {
             Log.e(TAG, "API call failed: ${e.message}", e)
             Result.failure(Exception("API call failed: ${e.message}"))
@@ -317,6 +312,7 @@ class NutritionRepository(
             // Replace existing intervals exercises for this date with fresh data
             exerciseLogDao.deleteIntervalsExercisesForDate(date.time)
             var activityCalories = 0
+            var activitySteps = 0
             for (activity in exerciseActivities) {
                 val kcal = if (activity.icuJoules != null) {
                     (activity.icuJoules / 1000).toInt()
@@ -324,13 +320,29 @@ class NutritionRepository(
                     ((activity.calories ?: 0) * 0.9).toInt()
                 }
                 activityCalories += kcal
+
+                // Steps taken during the activity are already in the wellness step total, and
+                // its energy is counted as EAT — record them so NEAT can exclude them.
+                val steps = StepEstimator.estimateSteps(
+                    type = activity.type,
+                    name = activity.name,
+                    movingTimeSeconds = activity.movingTime,
+                    distanceMeters = (activity.distance ?: activity.icuDistance)?.toDouble(),
+                    averageCadence = activity.averageCadence?.toDouble(),
+                    averageStride = activity.averageStride?.toDouble()
+                )
+                activitySteps += steps
+                Log.d(TAG, "Activity ${activity.name} (${activity.type}): $kcal kcal, $steps steps " +
+                        "(cadence=${activity.averageCadence}, stride=${activity.averageStride}, " +
+                        "distance=${activity.distance}, movingTime=${activity.movingTime})")
+
                 exerciseLogDao.insert(
                     com.danielag_nutritrack.app.data.ExerciseLog(
                         exerciseType = activity.name ?: activity.type ?: "Activity",
                         caloriesBurned = kcal,
                         timestamp = date,
                         duration = activity.movingTime?.let { it / 60 },
-                        notes = "intervals:${activity.id}" + (activity.averageCadence?.let { ";cadence:$it" } ?: "")
+                        notes = ExerciseNotes.forIntervalsActivity(activity.id, activity.type, steps)
                     )
                 )
             }
@@ -354,7 +366,8 @@ class NutritionRepository(
                     weight = wellness.weight?.toDouble(),
                     hrv = wellness.hrv?.toDouble(),
                     restingHR = wellness.restingHR,
-                    activityCalories = activityCalories
+                    activityCalories = activityCalories,
+                    activitySteps = activitySteps
                 )
             )
         } catch (e: Exception) {
@@ -430,64 +443,20 @@ class NutritionRepository(
                 ))
             }
 
-            val request = OpenAIRequest(
-                model = "gpt-5.5",
-                messages = listOf(
-                    Message(
-                        role = "user",
-                        content = contentList
-                    )
-                ),
-                maxTokens = 10000
-            )
+            val messages = listOf(Message(role = "user", content = contentList))
 
             Log.d(TAG, "Sending image analysis request to OpenAI (${base64Images.size} image(s))")
 
-            val response = openAIService.analyzeFood(
-                authorization = "Bearer $apiKey",
-                request = request
-            )
-
-            val content = response.choices.firstOrNull()?.message?.content
+            val content = requestAnalysis(messages)
 
             Log.d(TAG, "OpenAI image analysis response: $content")
 
-            if (content is String) {
-                // Store conversation for follow-up corrections
-                lastConversationMessages = request.messages + Message(role = "assistant", content = content)
-                try {
-                    // Try to extract JSON if it's wrapped in markdown code blocks
-                    val jsonContent = content.trim()
-                        .removePrefix("```json")
-                        .removePrefix("```")
-                        .removeSuffix("```")
-                        .trim()
+            // Store conversation for follow-up corrections
+            lastConversationMessages = messages + Message(role = "assistant", content = content)
 
-                    Log.d(TAG, "Attempting to parse JSON: $jsonContent")
-
-                    val nutritionInfo = Gson().fromJson(jsonContent, NutritionInfo::class.java)
-
-                    if (nutritionInfo == null) {
-                        Log.e(TAG, "Parsed NutritionInfo is null")
-                        Result.failure(Exception("Failed to parse nutrition information"))
-                    } else {
-                        Log.d(TAG, "Successfully parsed: ${nutritionInfo.name} with ${nutritionInfo.components?.size ?: 0} components")
-                        // Increment usage counter on success
-                        incrementApiUsage()
-                        Result.success(nutritionInfo)
-                    }
-                } catch (e: JsonSyntaxException) {
-                    Log.e(TAG, "JSON parsing error: ${e.message}")
-                    Log.e(TAG, "Content that failed to parse: $content")
-                    Result.failure(Exception("Failed to parse response: ${e.message}\nResponse: $content"))
-                } catch (e: Exception) {
-                    Log.e(TAG, "Unexpected error during parsing: ${e.message}")
-                    Result.failure(Exception("Failed to parse response: ${e.message}"))
-                }
-            } else {
-                Log.e(TAG, "Response content is not a String")
-                Result.failure(Exception("Invalid response format"))
-            }
+            val result = parseNutritionInfo(content)
+            if (result.isSuccess) incrementApiUsage()
+            result
         } catch (e: Exception) {
             Log.e(TAG, "Image API call failed: ${e.message}", e)
             Result.failure(e)
@@ -501,38 +470,13 @@ class NutritionRepository(
                 return Result.failure(Exception("Daily API limit reached ($DAILY_API_LIMIT calls). Resets at midnight."))
             }
 
-            val request = OpenAIRequest(
-                model = "gpt-5.5",
-                messages = conversationMessages,
-                maxTokens = 10000
-            )
+            val content = requestAnalysis(conversationMessages)
 
-            val response = openAIService.analyzeFood(
-                authorization = "Bearer $apiKey",
-                request = request
-            )
+            lastConversationMessages = conversationMessages + Message(role = "assistant", content = content)
 
-            val content = response.choices.firstOrNull()?.message?.content
-
-            if (content is String) {
-                lastConversationMessages = conversationMessages + Message(role = "assistant", content = content)
-
-                val jsonContent = content.trim()
-                    .removePrefix("```json")
-                    .removePrefix("```")
-                    .removeSuffix("```")
-                    .trim()
-
-                val nutritionInfo = Gson().fromJson(jsonContent, NutritionInfo::class.java)
-                if (nutritionInfo != null) {
-                    incrementApiUsage()
-                    Result.success(nutritionInfo)
-                } else {
-                    Result.failure(Exception("Failed to parse updated nutrition information"))
-                }
-            } else {
-                Result.failure(Exception("Invalid response format"))
-            }
+            val result = parseNutritionInfo(content)
+            if (result.isSuccess) incrementApiUsage()
+            result
         } catch (e: Exception) {
             Log.e(TAG, "Food refinement failed: ${e.message}", e)
             Result.failure(e)
