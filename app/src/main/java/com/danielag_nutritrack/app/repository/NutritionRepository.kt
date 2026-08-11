@@ -37,7 +37,7 @@ class NutritionRepository(
     companion object {
         const val DAILY_API_LIMIT = 50 // Configurable daily limit
         private const val TAG = "NutritionRepository"
-        private const val MODEL = "gpt-5.5"
+        private const val MODEL = "gpt-5.6"
         private const val MAX_COMPLETION_TOKENS = 10000
     }
 

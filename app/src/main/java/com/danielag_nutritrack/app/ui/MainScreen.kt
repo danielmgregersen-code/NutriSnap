@@ -35,6 +35,7 @@ import java.text.SimpleDateFormat
 import java.util.*
 import java.util.Locale
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.platform.LocalView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 
@@ -53,6 +54,16 @@ fun MainScreen(viewModel: MainViewModel) {
     val syncMessage by viewModel.syncMessage.collectAsState()
     val isRefining by viewModel.isRefining.collectAsState()
     val favoriteMeals by viewModel.favoriteMeals.collectAsState()
+
+    // An analysis can run for minutes. If the screen turns off mid-request the connection is
+    // dropped and the answer is lost even though OpenAI finished it, so hold the screen on
+    // for as long as a request is in flight.
+    val view = LocalView.current
+    val analysisRunning = uiState.isLoading || isRefining
+    DisposableEffect(analysisRunning) {
+        view.keepScreenOn = analysisRunning
+        onDispose { view.keepScreenOn = false }
+    }
 
     val snackbarHostState = remember { SnackbarHostState() }
 
