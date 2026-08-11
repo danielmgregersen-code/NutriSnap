@@ -7,6 +7,9 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.Bookmark
@@ -461,18 +464,30 @@ fun MainScreen(viewModel: MainViewModel) {
             )
         }
 
-        // Error Snackbar
+        // Errors are shown in a dialog, not a Snackbar: this Box aligns its children to the
+        // top, so a Snackbar here landed behind the app bar, and error text can run long
+        // enough (network failures, raw API responses) that only a fragment was readable.
         uiState.error?.let { error ->
-            Snackbar(
-                modifier = Modifier.padding(16.dp),
-                action = {
+            AlertDialog(
+                onDismissRequest = { viewModel.clearError() },
+                title = { Text("Something went wrong") },
+                text = {
+                    SelectionContainer {
+                        Text(
+                            text = error,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier
+                                .heightIn(max = 320.dp)
+                                .verticalScroll(rememberScrollState())
+                        )
+                    }
+                },
+                confirmButton = {
                     TextButton(onClick = { viewModel.clearError() }) {
                         Text("Dismiss")
                     }
                 }
-            ) {
-                Text(error)
-            }
+            )
         }
     }
 }

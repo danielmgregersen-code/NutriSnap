@@ -18,6 +18,8 @@ import retrofit2.http.Header
 import retrofit2.http.POST
 import retrofit2.http.Streaming
 import java.io.IOException
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
 import java.util.concurrent.TimeUnit
 
 data class OpenAIRequest(
@@ -64,7 +66,7 @@ internal data class StreamChoice(
 )
 internal data class StreamDelta(val content: String? = null)
 
-class OpenAIException(message: String) : Exception(message)
+class OpenAIException(message: String, cause: Throwable? = null) : Exception(message, cause)
 
 interface OpenAIService {
     @Streaming
@@ -138,7 +140,19 @@ suspend fun OpenAIService.requestCompletion(
             Log.w(OpenAIService.TAG, "Streaming attempt ${attempt + 1} failed: ${e.message}")
         }
     }
-    throw lastError ?: IOException("OpenAI request failed")
+
+    val error = lastError
+    throw OpenAIException(
+        when (error) {
+            is UnknownHostException ->
+                "Could not reach api.openai.com. Check that the phone has an internet connection."
+            is SocketTimeoutException ->
+                "OpenAI stopped responding. Please try again."
+            else ->
+                "Network error while contacting OpenAI: ${error?.message ?: "unknown"}"
+        },
+        error
+    )
 }
 
 private suspend fun OpenAIService.streamCompletion(
