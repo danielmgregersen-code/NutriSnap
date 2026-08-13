@@ -12,6 +12,7 @@ import java.util.Date
 import com.danielag_nutritrack.app.BuildConfig
 import com.danielag_nutritrack.app.utils.ExerciseNotes
 import com.danielag_nutritrack.app.utils.StepEstimator
+import com.danielag_nutritrack.app.utils.withAnalysisWakeLock
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -326,7 +327,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val correction = "$userMessage\n\nReturn the updated nutritional data in the exact same JSON format."
                 val messages = history + com.danielag_nutritrack.app.api.Message(role = "user", content = correction)
 
-                repository.refineFoodAnalysis(messages)
+                withAnalysisWakeLock(getApplication()) { repository.refineFoodAnalysis(messages) }
                     .onSuccess { nutritionInfo ->
                         _conversationHistory.value = repository.lastConversationMessages
 
@@ -366,7 +367,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 android.util.Log.d("NutriTrack", "Starting analysis for: $description")
 
-                repository.analyzeTextFood(description)
+                withAnalysisWakeLock(getApplication()) { repository.analyzeTextFood(description) }
                     .onSuccess { nutritionInfo ->
                         android.util.Log.d("NutriTrack", "Got response: ${nutritionInfo.name} with ${nutritionInfo.components?.size ?: 0} components")
 
@@ -429,7 +430,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 android.util.Log.d("NutriTrack", "Starting image analysis (${base64Images.size} image(s))")
 
-                repository.analyzeImageFood(base64Images, textContext)
+                withAnalysisWakeLock(getApplication()) { repository.analyzeImageFood(base64Images, textContext) }
                     .onSuccess { nutritionInfo ->
                         android.util.Log.d("NutriTrack", "Got image response: ${nutritionInfo.name} with ${nutritionInfo.components?.size ?: 0} components")
 
