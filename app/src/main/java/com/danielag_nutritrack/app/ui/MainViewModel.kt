@@ -894,26 +894,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 // Sync the last 7 days to ensure we catch any data that arrived late
                 val calendar = java.util.Calendar.getInstance()
                 var firstError: String? = null
-                var todaySync: com.danielag_nutritrack.app.repository.IntervalsSync? = null
-                repeat(7) { dayIndex ->
+                repeat(7) {
                     val date = calendar.time
                     repository.syncFromIntervals(date)
-                        .onSuccess { sync -> if (dayIndex == 0) todaySync = sync }
                         .onFailure { e -> if (firstError == null) firstError = e.message }
                     calendar.add(java.util.Calendar.DAY_OF_YEAR, -1)
                 }
 
-                _syncMessage.value = when {
-                    firstError != null -> "Synkronisering fejlede: $firstError"
-                    todaySync != null -> {
-                        val sync = todaySync!!
-                        val steps = sync.steps ?: 0
-                        if (sync.activitySteps > 0)
-                            "Synkroniseret: $steps skridt (−${sync.activitySteps} fra træning)"
-                        else
-                            "Synkroniseret: $steps skridt"
-                    }
-                    else -> null
+                // Only failures are worth interrupting for — the step numbers are on the
+                // daily card already.
+                if (firstError != null) {
+                    _syncMessage.value = "Synkronisering fejlede: $firstError"
                 }
                 loadData()
             } finally {
